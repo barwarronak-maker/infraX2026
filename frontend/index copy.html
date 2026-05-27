@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#C0392B">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ROADSoS">
+<title>ROADSoS — Emergency Services</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+
+<!-- Leaflet Map -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<!-- Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --red: #C0392B;
+    --red-dark: #96281B;
+    --red-light: #E74C3C;
+    --orange: #E67E22;
+    --blue: #2980B9;
+    --green: #27AE60;
+    --dark: #0D0D0D;
+    --dark2: #1A1A1A;
+    --dark3: #242424;
+    --border: rgba(255,255,255,0.08);
+    --text: #F0F0F0;
+    --text2: #A0A0A0;
+    --font-head: 'Bebas Neue', sans-serif;
+    --font-body: 'DM Sans', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    font-family: var(--font-body);
+    background: var(--dark);
+    color: var(--text);
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── TOP BAR ── */
+  #topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--dark2);
+    border-bottom: 1px solid var(--border);
+    padding: 0 12px;
+    height: 52px;
+    flex-shrink: 0;
+    z-index: 1000;
+    position: relative;
+  }
+
+  #logo {
+    font-family: var(--font-head);
+    font-size: 26px;
+    letter-spacing: 2px;
+    color: var(--red-light);
+    line-height: 1;
+  }
+  #logo span { color: var(--text2); font-size: 11px; font-family: var(--font-body); display: block; letter-spacing: 1px; text-transform: uppercase; margin-top: -2px; }
+
+  #status-pill {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    transition: all 0.3s;
+  }
+  .status-live { background: rgba(39,174,96,0.2); color: #2ECC71; border: 1px solid rgba(39,174,96,0.4); }
+  .status-offline { background: rgba(230,126,34,0.2); color: var(--orange); border: 1px solid rgba(230,126,34,0.4); }
+  .status-loading { background: rgba(41,128,185,0.2); color: #5DADE2; border: 1px solid rgba(41,128,185,0.4); }
+
+  /* ── EMERGENCY BAR ── */
+  #emergency-bar {
+    background: linear-gradient(90deg, var(--red-dark), var(--red));
+    padding: 0 8px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    overflow-x: auto;
+    flex-shrink: 0;
+    height: 40px;
+    scrollbar-width: none;
+  }
+  #emergency-bar::-webkit-scrollbar { display: none; }
+  #emergency-bar .label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.7);
+    white-space: nowrap;
+    padding-right: 4px;
+  }
+  .emerg-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(0,0,0,0.25);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 6px;
+    padding: 0 10px;
+    height: 28px;
+    text-decoration: none;
+    color: white;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background 0.15s;
+  }
+  .emerg-btn:hover, .emerg-btn:active { background: rgba(0,0,0,0.45); }
+  .emerg-btn .num { color: #FFD700; font-size: 13px; }
+
+  /* ── MAIN LAYOUT ── */
+  #main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── MAP ── */
+  #map {
+    flex: 1;
+    position: relative;
+    z-index: 1;
+  }
+  .leaflet-container { background: #1a1a2e !important; }
+
+  /* Map overlay buttons */
+  #map-controls {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 500;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .map-btn {
+    width: 38px;
+    height: 38px;
+    background: var(--dark2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    transition: background 0.15s;
+  }
+  .map-btn:hover { background: var(--dark3); }
+  .map-btn.active { background: var(--red); border-color: var(--red); }
+
+  /* Locate pulse */
+  #locate-btn { position: relative; }
+  #locate-btn.locating::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 10px;
+    border: 2px solid var(--red-light);
+    animation: pulse-ring 1s ease-out infinite;
+  }
+  @keyframes pulse-ring {
+    0% { transform: scale(0.9); opacity: 1; }
+    100% { transform: scale(1.3); opacity: 0; }
+  }
+
+  /* ── SIDE PANEL ── */
+  #panel {
+    width: 340px;
+    background: var(--dark2);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  #search-box {
+    padding: 10px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 6px;
+  }
+  #search-input {
+    flex: 1;
+    background: var(--dark3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 13px;
+    padding: 0 12px;
+    height: 36px;
+    outline: none;
+  }
+  #search-input:focus { border-color: rgba(192,57,43,0.5); }
+  #search-input::placeholder { color: var(--text2); }
+  #search-go {
+    width: 36px;
+    height: 36px;
+    background: var(--red);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-size: 15px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  /* Filter tabs */
+  #filters {
+    display: flex;
+    padding: 8px 10px;
+    gap: 5px;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex-shrink: 0;
+  }
+  #filters::-webkit-scrollbar { display: none; }
+  .filter-btn {
+    padding: 5px 11px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text2);
+    font-family: var(--font-body);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+    text-transform: uppercase;
+  }
+  .filter-btn:hover { border-color: var(--text2); color: var(--text); }
+  .filter-btn.active { background: var(--red); border-color: var(--red); color: white; }
+  .filter-btn.f-hospital.active { background: #C0392B; border-color: #C0392B; }
+  .filter-btn.f-police.active { background: #2980B9; border-color: #2980B9; }
+  .filter-btn.f-fire.active { background: #E67E22; border-color: #E67E22; }
+  .filter-btn.f-towing.active { background: #27AE60; border-color: #27AE60; }
+
+  /* Result list */
+  #results-header {
+    padding: 8px 12px 4px;
+    font-size: 11px;
+    color: var(--text2);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+
+  #results {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 8px 8px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .result-card {
+    background: var(--dark3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 11px 12px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .result-card:hover { border-color: rgba(255,255,255,0.18); background: #2a2a2a; }
+  .result-card.highlighted { border-color: var(--red); background: rgba(192,57,43,0.1); }
+
+  .card-left { flex: 1; min-width: 0; }
+  .card-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    flex-shrink: 0;
+    margin-bottom: 6px;
+  }
+  .icon-hospital { background: rgba(192,57,43,0.2); }
+  .icon-police { background: rgba(41,128,185,0.2); }
+  .icon-fire { background: rgba(230,126,34,0.2); }
+  .icon-towing { background: rgba(39,174,96,0.2); }
+
+  .card-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 3px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .card-address {
+    font-size: 11px;
+    color: var(--text2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-bottom: 4px;
+  }
+  .card-dist {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--green);
+  }
+
+  .card-actions { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+  .call-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--green);
+    color: white;
+    text-decoration: none;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 5px 10px;
+    border-radius: 6px;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    transition: background 0.15s;
+  }
+  .call-btn:hover { background: #219A52; }
+  .cat-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 7px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .badge-hospital { background: rgba(192,57,43,0.2); color: #E74C3C; }
+  .badge-police { background: rgba(41,128,185,0.2); color: #5DADE2; }
+  .badge-fire { background: rgba(230,126,34,0.2); color: #F39C12; }
+  .badge-towing { background: rgba(39,174,96,0.2); color: #2ECC71; }
+
+  #empty-state {
+    display: none;
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--text2);
+  }
+  #empty-state .big { font-size: 36px; margin-bottom: 8px; }
+  #empty-state p { font-size: 13px; }
+
+  /* ── SOS BUTTON ── */
+  #sos-btn {
+    margin: 8px;
+    height: 52px;
+    background: linear-gradient(135deg, var(--red-dark), var(--red-light));
+    border: none;
+    border-radius: 12px;
+    color: white;
+    font-family: var(--font-head);
+    font-size: 22px;
+    letter-spacing: 3px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    position: relative;
+    overflow: hidden;
+    flex-shrink: 0;
+    box-shadow: 0 4px 20px rgba(192,57,43,0.4);
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+  #sos-btn:active { transform: scale(0.98); box-shadow: 0 2px 10px rgba(192,57,43,0.3); }
+  #sos-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+    transform: translateX(-100%);
+    animation: shimmer 2.5s infinite;
+  }
+  @keyframes shimmer { to { transform: translateX(100%); } }
+
+  /* ── MOBILE BOTTOM SHEET ── */
+  @media (max-width: 640px) {
+    #main { flex-direction: column; }
+    #panel {
+      width: 100%;
+      height: 260px;
+      border-left: none;
+      border-top: 1px solid var(--border);
+    }
+    #map { flex: 1; }
+    #filters { padding: 6px 8px; }
+    #map-controls { top: 8px; right: 8px; }
+  }
+
+  /* ── SOS MODAL ── */
+  #sos-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.8);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  #sos-modal.open { display: flex; }
+  .modal-box {
+    background: var(--dark2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    width: 100%;
+    max-width: 380px;
+  }
+  .modal-title {
+    font-family: var(--font-head);
+    font-size: 28px;
+    letter-spacing: 2px;
+    color: var(--red-light);
+    margin-bottom: 6px;
+  }
+  .modal-sub { font-size: 13px; color: var(--text2); margin-bottom: 20px; }
+  .modal-actions { display: flex; flex-direction: column; gap: 8px; }
+  .modal-btn {
+    padding: 14px;
+    border-radius: 10px;
+    border: none;
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    transition: opacity 0.15s;
+  }
+  .modal-btn:hover { opacity: 0.85; }
+  .modal-btn .icon { font-size: 20px; }
+  .btn-call-112 { background: var(--red); color: white; }
+  .btn-call-108 { background: #E67E22; color: white; }
+  .btn-share { background: var(--dark3); color: var(--text); border: 1px solid var(--border); }
+  .modal-close { background: transparent; border: 1px solid var(--border); color: var(--text2); margin-top: 8px; justify-content: center; }
+
+  /* ── TOAST ── */
+  #toast {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--dark3);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 13px;
+    padding: 10px 18px;
+    border-radius: 24px;
+    z-index: 9998;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.3s;
+    white-space: nowrap;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* Loading spinner */
+  #loading {
+    position: absolute;
+    inset: 0;
+    background: rgba(13,13,13,0.85);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    z-index: 800;
+  }
+  #loading .spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--red-light);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loading p { font-size: 13px; color: var(--text2); }
+
+  /* Offline banner */
+  #offline-banner {
+    display: none;
+    background: rgba(230,126,34,0.15);
+    border-bottom: 1px solid rgba(230,126,34,0.3);
+    padding: 6px 12px;
+    font-size: 11px;
+    color: var(--orange);
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    flex-shrink: 0;
+  }
+  #offline-banner.show { display: block; }
+
+  /* Leaflet popup dark theme */
+  .leaflet-popup-content-wrapper {
+    background: var(--dark2) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 10px !important;
+    color: var(--text) !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5) !important;
+  }
+  .leaflet-popup-tip { background: var(--dark2) !important; }
+  .leaflet-popup-content { font-family: var(--font-body); font-size: 13px; margin: 10px 14px !important; }
+  .popup-name { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+  .popup-addr { color: var(--text2); font-size: 12px; margin-bottom: 8px; }
+  .popup-call {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--green);
+    color: white;
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 6px 12px;
+    border-radius: 6px;
+  }
+
+  /* User location pin */
+  .user-pin {
+    width: 14px;
+    height: 14px;
+    background: #5DADE2;
+    border: 3px solid white;
+    border-radius: 50%;
+    box-shadow: 0 0 0 4px rgba(93,173,226,0.3);
+    animation: user-pulse 2s ease-out infinite;
+  }
+  @keyframes user-pulse {
+    0%,100% { box-shadow: 0 0 0 4px rgba(93,173,226,0.3); }
+    50% { box-shadow: 0 0 0 8px rgba(93,173,226,0.1); }
+  }
+
+  /* AI feature badge */
+  #ai-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: rgba(41,128,185,0.1);
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text2);
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  #ai-badge:hover { background: rgba(41,128,185,0.2); }
+  #ai-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: #5DADE2; animation: blink 1.5s ease-in-out infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* AI Modal */
+  #ai-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  #ai-modal.open { display: flex; }
+  #ai-drop {
+    border: 2px dashed rgba(93,173,226,0.4);
+    border-radius: 12px;
+    padding: 30px;
+    text-align: center;
+    margin: 16px 0;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    color: var(--text2);
+    font-size: 13px;
+  }
+  #ai-drop:hover, #ai-drop.dragover { border-color: #5DADE2; color: var(--text); }
+  #ai-drop .big { font-size: 32px; margin-bottom: 8px; }
+  #ai-result {
+    background: var(--dark3);
+    border-radius: 10px;
+    padding: 14px;
+    font-size: 13px;
+    line-height: 1.6;
+    display: none;
+    margin-top: 12px;
+  }
+  .severity-critical { color: #E74C3C; font-weight: 700; }
+  .severity-moderate { color: #F39C12; font-weight: 700; }
+  .severity-minor { color: #2ECC71; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<!-- Top Bar -->
+<div id="topbar">
+  <div id="logo">ROADSoS <span>Emergency Services</span></div>
+  <div id="status-pill" class="status-loading">Locating…</div>
+</div>
+
+<!-- Offline Banner -->
+<div id="offline-banner">⚠ Offline mode — showing cached data</div>
+
+<!-- Emergency Bar -->
+<div id="emergency-bar">
+  <span class="label">Quick dial</span>
+  <a class="emerg-btn" href="tel:112"><span class="num">112</span> Emergency</a>
+  <a class="emerg-btn" href="tel:108"><span class="num">108</span> Ambulance</a>
+  <a class="emerg-btn" href="tel:100"><span class="num">100</span> Police</a>
+  <a class="emerg-btn" href="tel:101"><span class="num">101</span> Fire</a>
+  <a class="emerg-btn" href="tel:1073"><span class="num">1073</span> Highway</a>
+</div>
+
+<!-- Main Layout -->
+<div id="main">
+  <!-- Map -->
+  <div id="map">
+    <div id="loading">
+      <div class="spinner"></div>
+      <p>Getting your location…</p>
+    </div>
+    <div id="map-controls">
+      <button class="map-btn" id="locate-btn" title="My location" onclick="locateMe()">📍</button>
+      <button class="map-btn" id="radius-btn" title="Toggle radius" onclick="toggleRadius()">⭕</button>
+      <button class="map-btn" id="refresh-btn" title="Refresh data" onclick="fetchNearby()">🔄</button>
+    </div>
+  </div>
+
+  <!-- Side Panel -->
+  <div id="panel">
+    <!-- Search -->
+    <div id="search-box">
+      <input id="search-input" placeholder="Search city or area…" onkeydown="if(event.key==='Enter')searchCity()">
+      <button id="search-go" onclick="searchCity()">🔍</button>
+    </div>
+
+    <!-- Filters -->
+    <div id="filters">
+      <button class="filter-btn active" data-cat="all" onclick="setFilter(this,'all')">All</button>
+      <button class="filter-btn f-hospital" data-cat="hospital" onclick="setFilter(this,'hospital')">🏥 Hospital</button>
+      <button class="filter-btn f-police" data-cat="police" onclick="setFilter(this,'police')">🚔 Police</button>
+      <button class="filter-btn f-fire" data-cat="fire" onclick="setFilter(this,'fire')">🔥 Fire</button>
+      <button class="filter-btn f-towing" data-cat="towing" onclick="setFilter(this,'towing')">🔧 Towing</button>
+    </div>
+
+    <!-- Results -->
+    <div id="results-header">Nearby services</div>
+    <div id="results">
+      <div id="empty-state">
+        <div class="big">📡</div>
+        <p>No services found.<br>Try adjusting the filter or search a city.</p>
+      </div>
+    </div>
+
+    <!-- SOS Button -->
+    <button id="sos-btn" onclick="openSOS()">🆘 SOS — SEND EMERGENCY ALERT</button>
+
+    <!-- AI Badge -->
+    <div id="ai-badge" onclick="openAI()">
+      <div class="dot"></div>
+      <span>AI Accident Severity Analyser — tap to upload photo</span>
+    </div>
+  </div>
+</div>
+
+<!-- SOS Modal -->
+<div id="sos-modal">
+  <div class="modal-box">
+    <div class="modal-title">🆘 SOS ALERT</div>
+    <div class="modal-sub" id="sos-coords">Getting your coordinates…</div>
+    <div class="modal-actions">
+      <a class="modal-btn btn-call-112" href="tel:112">
+        <span class="icon">📞</span>
+        <div><div style="font-size:16px">Call 112 — Unified Emergency</div><div style="font-size:11px;opacity:0.8">Routes to police, ambulance, fire</div></div>
+      </a>
+      <a class="modal-btn btn-call-108" href="tel:108">
+        <span class="icon">🚑</span>
+        <div><div style="font-size:16px">Call 108 — Ambulance</div><div style="font-size:11px;opacity:0.8">Free emergency medical service</div></div>
+      </a>
+      <button class="modal-btn btn-share" onclick="shareLocation()">
+        <span class="icon">📍</span>
+        <div><div style="font-size:14px">Share GPS Location</div><div style="font-size:11px;color:var(--text2)">Send coordinates via WhatsApp/SMS</div></div>
+      </button>
+      <button class="modal-btn modal-close" onclick="closeSOS()">Dismiss</button>
+    </div>
+  </div>
+</div>
+
+<!-- AI Modal -->
+<div id="ai-modal">
+  <div class="modal-box">
+    <div class="modal-title">🤖 AI TRIAGE</div>
+    <div class="modal-sub">Upload an accident scene photo for AI severity analysis</div>
+    <div id="ai-drop" onclick="document.getElementById('ai-file').click()" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="handleDrop(event)">
+      <div class="big">📸</div>
+      Tap to upload or drag photo here<br>
+      <span style="font-size:11px;color:var(--text2)">Supports JPG, PNG</span>
+    </div>
+    <input type="file" id="ai-file" accept="image/*" style="display:none" onchange="analysePhoto(this.files[0])">
+    <div id="ai-result"></div>
+    <div class="modal-actions" style="margin-top:12px">
+      <button class="modal-btn modal-close" style="width:100%;justify-content:center" onclick="closeAI()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+// ── STATE ──
+let map, userMarker, radiusCircle, markers = [];
+let allServices = [];
+let currentFilter = 'all';
+let userLat = null, userLng = null;
+let isOnline = navigator.onLine;
+const DB_NAME = 'roadsos-db', STORE = 'services';
+
+// ── OFFLINE FALLBACK DATA ── (20 verified entries)
+const FALLBACK = [
+  {id:1,name:"Sassoon General Hospital",category:"hospital",lat:18.5178,lng:73.8543,phone:"02026120009",address:"Pune, Maharashtra",city:"Pune"},
+  {id:2,name:"KEM Hospital Pune",category:"hospital",lat:18.512,lng:73.8553,phone:"02026128000",address:"Rasta Peth, Pune",city:"Pune"},
+  {id:3,name:"Ruby Hall Clinic",category:"hospital",lat:18.532,lng:73.882,phone:"02026163391",address:"Wanowrie, Pune",city:"Pune"},
+  {id:4,name:"Jehangir Hospital",category:"hospital",lat:18.5289,lng:73.875,phone:"02026051000",address:"Nagar Road, Pune",city:"Pune"},
+  {id:5,name:"Deenanath Mangeshkar Hospital",category:"hospital",lat:18.5122,lng:73.8288,phone:"02020660606",address:"Erandwane, Pune",city:"Pune"},
+  {id:6,name:"Poona Hospital",category:"hospital",lat:18.5236,lng:73.8478,phone:"02025535035",address:"Sadashiv Peth, Pune",city:"Pune"},
+  {id:7,name:"Pune Police Headquarters",category:"police",lat:18.5195,lng:73.8553,phone:"100",address:"Shivajinagar, Pune",city:"Pune"},
+  {id:8,name:"Shivajinagar Police Station",category:"police",lat:18.53,lng:73.8456,phone:"02025536298",address:"Shivajinagar, Pune",city:"Pune"},
+  {id:9,name:"Deccan Fire Station",category:"fire",lat:18.5201,lng:73.8452,phone:"101",address:"Deccan Gymkhana, Pune",city:"Pune"},
+  {id:10,name:"Pune City Fire Brigade",category:"fire",lat:18.5167,lng:73.8567,phone:"02026133333",address:"Mangalwar Peth, Pune",city:"Pune"},
+  {id:11,name:"AIIMS Delhi",category:"hospital",lat:28.5672,lng:77.21,phone:"01126588500",address:"Ansari Nagar, New Delhi",city:"Delhi"},
+  {id:12,name:"Safdarjung Hospital",category:"hospital",lat:28.5674,lng:77.209,phone:"01126707444",address:"New Delhi",city:"Delhi"},
+  {id:13,name:"RML Hospital Delhi",category:"hospital",lat:28.6237,lng:77.209,phone:"01123404321",address:"Connaught Place, Delhi",city:"Delhi"},
+  {id:14,name:"Delhi Police HQ",category:"police",lat:28.6304,lng:77.2177,phone:"100",address:"ITO, New Delhi",city:"Delhi"},
+  {id:15,name:"KEM Hospital Mumbai",category:"hospital",lat:18.999,lng:72.8418,phone:"022241070000",address:"Parel, Mumbai",city:"Mumbai"},
+  {id:16,name:"Nair Hospital Mumbai",category:"hospital",lat:18.9647,lng:72.8258,phone:"02223027600",address:"Mumbai Central",city:"Mumbai"},
+  {id:17,name:"Mumbai Police",category:"police",lat:18.9322,lng:72.8418,phone:"100",address:"Crawford Market, Mumbai",city:"Mumbai"},
+  {id:18,name:"St. Johns Medical College",category:"hospital",lat:12.925,lng:77.612,phone:"08022064000",address:"Koramangala, Bengaluru",city:"Bengaluru"},
+  {id:19,name:"Bowring Hospital Bengaluru",category:"hospital",lat:12.9716,lng:77.5946,phone:"08025571100",address:"Shivajinagar, Bengaluru",city:"Bengaluru"},
+  {id:20,name:"Govt Stanley Hospital Chennai",category:"hospital",lat:13.0827,lng:80.2707,phone:"04425281232",address:"Old Jail Road, Chennai",city:"Chennai"}
+];
+
+// ── INDEXEDDB ──
+let db;
+function openDB() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = e => {
+      e.target.result.createObjectStore(STORE, {keyPath:'id'});
+    };
+    req.onsuccess = e => { db = e.target.result; res(db); };
+    req.onerror = () => rej(req.error);
+  });
+}
+function cacheServices(data) {
+  if (!db) return;
+  const tx = db.transaction(STORE, 'readwrite');
+  const st = tx.objectStore(STORE);
+  st.clear();
+  data.forEach(s => st.put({...s, _cached: Date.now()}));
+}
+function getCachedServices() {
+  return new Promise((res, rej) => {
+    if (!db) return res([]);
+    const tx = db.transaction(STORE, 'readonly');
+    const req = tx.objectStore(STORE).getAll();
+    req.onsuccess = () => res(req.result || []);
+    req.onerror = () => res([]);
+  });
+}
+
+// ── MAP INIT ──
+async function initApp() {
+  await openDB();
+  map = L.map('map', {
+    center: [20.5937, 78.9629],
+    zoom: 5,
+    zoomControl: false,
+    attributionControl: true
+  });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors',
+    maxZoom: 19
+  }).addTo(map);
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+  window.addEventListener('online', () => { isOnline = true; document.getElementById('offline-banner').classList.remove('show'); fetchNearby(); });
+  window.addEventListener('offline', () => { isOnline = false; document.getElementById('offline-banner').classList.add('show'); });
+
+  locateMe();
+}
+
+// ── GEOLOCATION ──
+function locateMe() {
+  document.getElementById('locate-btn').classList.add('locating');
+  setStatus('loading', 'Locating…');
+  if (!navigator.geolocation) {
+    hideLoading();
+    toast('GPS not available — search a city above');
+    loadFallback();
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      userLat = pos.coords.latitude;
+      userLng = pos.coords.longitude;
+      document.getElementById('locate-btn').classList.remove('locating');
+      placeUserPin(userLat, userLng);
+      map.setView([userLat, userLng], 14);
+      fetchNearby();
+      updateSOSCoords();
+    },
+    err => {
+      document.getElementById('locate-btn').classList.remove('locating');
+      hideLoading();
+      setStatus('offline', 'No GPS');
+      toast('Location denied — search a city to find services');
+      loadFallback();
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+  );
+}
+
+function placeUserPin(lat, lng) {
+  if (userMarker) map.removeLayer(userMarker);
+  userMarker = L.marker([lat, lng], {
+    icon: L.divIcon({ className: '', html: '<div class="user-pin"></div>', iconSize: [14,14], iconAnchor: [7,7] })
+  }).addTo(map).bindPopup('📍 You are here');
+}
+
+// ── FETCH NEARBY (Overpass API) ──
+async function fetchNearby() {
+  if (!userLat) return;
+  setStatus('loading', 'Loading…');
+  showLoading('Finding nearby services…');
+
+  if (!isOnline) {
+    await loadFromCache();
+    return;
+  }
+
+  // Try Overpass API for live data
+  const r = 5000;
+  const query = `[out:json][timeout:15];
+(
+  node["amenity"="hospital"](around:${r},${userLat},${userLng});
+  node["amenity"="police"](around:${r},${userLat},${userLng});
+  node["amenity"="fire_station"](around:${r},${userLat},${userLng});
+  node["shop"="car_repair"](around:${r},${userLat},${userLng});
+  way["amenity"="hospital"](around:${r},${userLat},${userLng});
+  way["amenity"="police"](around:${r},${userLat},${userLng});
+  way["amenity"="fire_station"](around:${r},${userLat},${userLng});
+)->.all;
+(.all;>;);
+out center;`;
+
+  try {
+    const resp = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      body: query,
+      signal: AbortSignal.timeout(15000)
+    });
+    const data = await resp.json();
+    const services = parseOverpass(data.elements);
+
+    if (services.length > 0) {
+      // Merge with fallback to ensure numbers always present
+      const merged = mergeWithFallback(services);
+      cacheServices(merged);
+      renderServices(merged);
+      setStatus('live', `${merged.length} found`);
+    } else {
+      await loadFromCache();
+    }
+  } catch(e) {
+    await loadFromCache();
+  }
+  hideLoading();
+}
+
+function parseOverpass(elements) {
+  const catMap = { hospital: 'hospital', police: 'police', fire_station: 'fire', car_repair: 'towing' };
+  const seen = new Set();
+  return elements
+    .filter(el => {
+      const a = el.tags?.amenity || el.tags?.shop;
+      return a && catMap[a] && el.tags?.name && !seen.has(el.tags.name) && seen.add(el.tags.name);
+    })
+    .map((el, i) => ({
+      id: 1000 + i,
+      name: el.tags.name,
+      category: catMap[el.tags?.amenity || el.tags?.shop],
+      lat: el.lat || el.center?.lat,
+      lng: el.lon || el.center?.lon,
+      phone: el.tags?.phone || el.tags?.['contact:phone'] || '',
+      address: [el.tags?.['addr:street'], el.tags?.['addr:city']].filter(Boolean).join(', ') || 'Nearby',
+      city: el.tags?.['addr:city'] || ''
+    }))
+    .filter(s => s.lat && s.lng);
+}
+
+function mergeWithFallback(live) {
+  // Add fallback entries that are close to user
+  const nearby = FALLBACK.filter(f => dist(userLat, userLng, f.lat, f.lng) < 10000);
+  const names = new Set(live.map(s => s.name.toLowerCase()));
+  const extra = nearby.filter(f => !names.has(f.name.toLowerCase()));
+  return [...live, ...extra];
+}
+
+async function loadFromCache() {
+  let cached = await getCachedServices();
+  if (cached.length === 0) cached = loadFallback();
+  else {
+    document.getElementById('offline-banner').classList.add('show');
+    setStatus('offline', 'Cached');
+  }
+  renderServices(cached);
+  hideLoading();
+}
+
+function loadFallback() {
+  document.getElementById('offline-banner').classList.add('show');
+  setStatus('offline', 'Offline');
+  renderServices(FALLBACK);
+  return FALLBACK;
+}
+
+// ── DISTANCE ──
+function dist(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const dLat = (lat2-lat1)*Math.PI/180;
+  const dLng = (lng2-lng1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function fmtDist(m) {
+  if (!m && m !== 0) return '';
+  return m < 1000 ? `${Math.round(m)}m away` : `${(m/1000).toFixed(1)}km away`;
+}
+
+// ── RENDER ──
+function renderServices(data) {
+  if (userLat) {
+    data = data.map(s => ({ ...s, _dist: dist(userLat, userLng, s.lat, s.lng) }));
+    data.sort((a,b) => a._dist - b._dist);
+  }
+
+  allServices = data;
+
+  // Clear markers
+  markers.forEach(m => map.removeLayer(m));
+  markers = [];
+
+  const filtered = currentFilter === 'all' ? data : data.filter(s => s.category === currentFilter);
+
+  filtered.forEach(s => addMarker(s));
+  renderList(filtered);
+}
+
+const CAT_ICONS = {
+  hospital: { emoji: '🏥', color: '#C0392B' },
+  police:   { emoji: '🚔', color: '#2980B9' },
+  fire:     { emoji: '🔥', color: '#E67E22' },
+  towing:   { emoji: '🔧', color: '#27AE60' }
+};
+
+function addMarker(s) {
+  const ci = CAT_ICONS[s.category] || { emoji: '📍', color: '#888' };
+  const icon = L.divIcon({
+    className: '',
+    html: `<div style="background:${ci.color};width:28px;height:28px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;"><span style="transform:rotate(45deg);font-size:13px">${ci.emoji}</span></div>`,
+    iconSize: [28,28], iconAnchor: [14,28], popupAnchor: [0,-30]
+  });
+  const m = L.marker([s.lat, s.lng], {icon}).addTo(map);
+  const distStr = s._dist ? `<div style="color:#2ECC71;font-size:11px;font-weight:600;margin-bottom:8px">${fmtDist(s._dist)}</div>` : '';
+  const phoneStr = s.phone ? `<a class="popup-call" href="tel:${s.phone}">📞 Call ${s.phone}</a>` : '';
+  m.bindPopup(`<div class="popup-name">${s.name}</div><div class="popup-addr">${s.address}</div>${distStr}${phoneStr}`);
+  m.on('click', () => highlightCard(s.id));
+  markers.push(m);
+}
+
+function renderList(data) {
+  const el = document.getElementById('results');
+  const empty = document.getElementById('empty-state');
+  const header = document.getElementById('results-header');
+
+  if (data.length === 0) {
+    empty.style.display = 'block';
+    el.innerHTML = '';
+    el.appendChild(empty);
+    header.textContent = 'No services found';
+    return;
+  }
+  empty.style.display = 'none';
+  header.textContent = `${data.length} service${data.length!==1?'s':''} nearby`;
+
+  el.innerHTML = '';
+  data.forEach(s => {
+    const ci = CAT_ICONS[s.category] || { emoji: '📍' };
+    const card = document.createElement('div');
+    card.className = 'result-card';
+    card.id = `card-${s.id}`;
+    card.innerHTML = `
+      <div class="card-left">
+        <div class="card-icon icon-${s.category}">${ci.emoji}</div>
+        <div class="card-name">${s.name}</div>
+        <div class="card-address">${s.address}</div>
+        ${s._dist ? `<div class="card-dist">${fmtDist(s._dist)}</div>` : ''}
+      </div>
+      <div class="card-actions">
+        ${s.phone ? `<a class="call-btn" href="tel:${s.phone}">📞 Call</a>` : ''}
+        <span class="cat-badge badge-${s.category}">${s.category}</span>
+      </div>`;
+    card.onclick = () => {
+      map.setView([s.lat, s.lng], 16);
+      markers.forEach((m,i) => { try { m.closePopup(); } catch(e){} });
+      setTimeout(() => { try { markers.find((_,i) => {
+        // fly to and open popup
+      }); } catch(e){} }, 100);
+    };
+    el.appendChild(card);
+  });
+}
+
+function highlightCard(id) {
+  document.querySelectorAll('.result-card').forEach(c => c.classList.remove('highlighted'));
+  const card = document.getElementById(`card-${id}`);
+  if (card) { card.classList.add('highlighted'); card.scrollIntoView({behavior:'smooth',block:'nearest'}); }
+}
+
+// ── FILTER ──
+function setFilter(btn, cat) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentFilter = cat;
+  const filtered = cat === 'all' ? allServices : allServices.filter(s => s.category === cat);
+  markers.forEach(m => map.removeLayer(m));
+  markers = [];
+  filtered.forEach(s => addMarker(s));
+  renderList(filtered);
+}
+
+// ── RADIUS TOGGLE ──
+let radiusShown = false;
+function toggleRadius() {
+  if (!userLat) return;
+  radiusShown = !radiusShown;
+  if (radiusShown) {
+    radiusCircle = L.circle([userLat, userLng], { radius: 5000, color: '#C0392B', fillColor: '#C0392B', fillOpacity: 0.05, weight: 1, dashArray: '5,5' }).addTo(map);
+    document.getElementById('radius-btn').classList.add('active');
+  } else {
+    if (radiusCircle) map.removeLayer(radiusCircle);
+    document.getElementById('radius-btn').classList.remove('active');
+  }
+}
+
+// ── CITY SEARCH ──
+async function searchCity() {
+  const q = document.getElementById('search-input').value.trim();
+  if (!q) return;
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`);
+    const data = await r.json();
+    if (data.length > 0) {
+      userLat = parseFloat(data[0].lat);
+      userLng = parseFloat(data[0].lon);
+      placeUserPin(userLat, userLng);
+      map.setView([userLat, userLng], 14);
+      fetchNearby();
+    } else {
+      toast('City not found — try a different name');
+    }
+  } catch(e) { toast('Search unavailable offline'); }
+}
+
+// ── SOS ──
+function openSOS() {
+  document.getElementById('sos-modal').classList.add('open');
+  updateSOSCoords();
+}
+function closeSOS() { document.getElementById('sos-modal').classList.remove('open'); }
+function updateSOSCoords() {
+  const el = document.getElementById('sos-coords');
+  if (userLat) el.textContent = `📍 Your GPS: ${userLat.toFixed(5)}, ${userLng.toFixed(5)}`;
+  else el.textContent = 'GPS location not yet acquired';
+}
+function shareLocation() {
+  if (!userLat) { toast('GPS location not available yet'); return; }
+  const msg = `🆘 EMERGENCY — I need help!\n📍 My location: https://maps.google.com/?q=${userLat},${userLng}\nCoords: ${userLat.toFixed(5)}, ${userLng.toFixed(5)}\nCall 112 for assistance.`;
+  if (navigator.share) {
+    navigator.share({ title: 'SOS Emergency', text: msg }).catch(()=>{});
+  } else {
+    const url = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank');
+  }
+}
+
+// ── AI TRIAGE ──
+function openAI() { document.getElementById('ai-modal').classList.add('open'); }
+function closeAI() { document.getElementById('ai-modal').classList.remove('open'); document.getElementById('ai-result').style.display='none'; }
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('ai-drop').classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) analysePhoto(file);
+}
+
+async function analysePhoto(file) {
+  const resultEl = document.getElementById('ai-result');
+  resultEl.style.display = 'block';
+  resultEl.innerHTML = '<div style="color:var(--text2)">🤖 Analysing image…</div>';
+
+  try {
+    const b64 = await fileToBase64(file);
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 500,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: file.type, data: b64 } },
+            { type: 'text', text: 'You are an emergency triage assistant. Analyse this accident scene image. Respond in this exact format:\nSEVERITY: [CRITICAL/MODERATE/MINOR]\nINJURIES: [brief description]\nIMMEDIATE ACTION: [what to do right now in one sentence]\nSERVICES NEEDED: [e.g. Ambulance, Police, Fire Brigade]\nDo not add any other text.' }
+          ]
+        }]
+      })
+    });
+
+    if (!resp.ok) throw new Error('API error');
+    const data = await resp.json();
+    const text = data.content?.[0]?.text || '';
+    resultEl.innerHTML = formatAIResult(text);
+  } catch(e) {
+    // Graceful fallback if API key not configured
+    resultEl.innerHTML = `
+      <div style="color:var(--text2);font-size:12px;margin-bottom:10px">⚠ AI analysis requires API key configuration.</div>
+      <div style="font-size:13px">In the meantime, call <strong style="color:#E74C3C">112</strong> for all emergencies or <strong style="color:#E67E22">108</strong> for ambulance.</div>`;
+  }
+}
+
+function formatAIResult(text) {
+  const lines = text.trim().split('\n');
+  let html = '';
+  lines.forEach(line => {
+    if (line.startsWith('SEVERITY:')) {
+      const sev = line.replace('SEVERITY:','').trim();
+      const cls = sev === 'CRITICAL' ? 'severity-critical' : sev === 'MODERATE' ? 'severity-moderate' : 'severity-minor';
+      html += `<div style="margin-bottom:8px">Severity: <span class="${cls}">${sev}</span></div>`;
+    } else if (line.includes(':')) {
+      const [k,...v] = line.split(':');
+      html += `<div style="margin-bottom:6px"><span style="color:var(--text2);font-size:11px;text-transform:uppercase;letter-spacing:0.5px">${k}</span><br>${v.join(':').trim()}</div>`;
+    }
+  });
+  return html || `<div>${text}</div>`;
+}
+
+function fileToBase64(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(',')[1]);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+// ── UI HELPERS ──
+function setStatus(type, text) {
+  const el = document.getElementById('status-pill');
+  el.className = 'status-pill';
+  el.classList.add(`status-${type}`);
+  el.textContent = text;
+}
+function showLoading(msg) {
+  const el = document.getElementById('loading');
+  el.querySelector('p').textContent = msg;
+  el.style.display = 'flex';
+}
+function hideLoading() { document.getElementById('loading').style.display = 'none'; }
+
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ── SERVICE WORKER ──
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+// ── BOOT ──
+initApp();
+</script>
+</body>
+</html>

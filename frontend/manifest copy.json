@@ -1,0 +1,28 @@
+{
+  "name": "ROADSoS — Emergency Services",
+  "short_name": "ROADSoS",
+  "description": "Find nearest trauma centres, police, ambulance and towing services instantly during road accidents.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0D0D0D",
+  "theme_color": "#C0392B",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["medical", "navigation", "utilities"],
+  "lang": "en-IN",
+  "dir": "ltr",
+  "scope": "/"
+}
