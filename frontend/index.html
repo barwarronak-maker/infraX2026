@@ -4199,7 +4199,8 @@ async function runAccidentDemo() {
   await delay(80);
   document.getElementById('demo-ai-bar').style.width = '100%';
 
-  // ── Phase 3: POST to /api/detect ──────────────────────────────────
+  // ── Phase 
+  // 3: POST to /api/detect ──────────────────────────────────
   let analysisData = null;
   try {
     const res = await fetch(`${DEMO_BACKEND}/api/detect`, {
