@@ -289,16 +289,27 @@ def get_nearest_hospitals(lat: float, lng: float, limit: int = 5) -> list:
     return []
 
 # ─────────────────────────────────────────────
-# HELPER — Get ALL service types near user: Google → Overpass → static fallback
+# HELPER — Get ALL service types near user: Overpass → static fallback
 # ─────────────────────────────────────────────
-def get_all_services(lat: float, lng: float, limit: int = 15) -> list:
-    # Try Overpass first (has all types, no key needed)
+def get_all_services(lat: float, lng: float, limit: int = 40) -> list:
+    """Query Overpass for all service types. Falls back to FALLBACK_SERVICES filtered by distance."""
     services = get_services_from_overpass(lat, lng, radius=8000)
     if services:
+        # Assign stable integer ids and _dist (meters) for frontend compatibility
+        for i, s in enumerate(services):
+            s.setdefault("id", (hash(s["name"]) & 0x7FFFFFFF) % 900000 + 100)
+            s["_dist"] = s.get("distance_km", 0) * 1000
         return services[:limit]
 
-    # No static fallback — only real live data from Overpass
-    return []
+    # Overpass failed — fall back to static data sorted by distance to user
+    print(f"[ROADSoS] Overpass returned nothing, using static fallback for ({lat},{lng})")
+    for i, s in enumerate(FALLBACK_SERVICES):
+        d = haversine_km(lat, lng, s["lat"], s["lng"])
+        s["distance_km"] = round(d, 2)
+        s["_dist"] = d * 1000
+        s["id"] = s.get("id", 5000 + i)
+        s["eta_minutes"] = max(3, int((d / 40) * 60))
+    return sorted(FALLBACK_SERVICES, key=lambda x: x["_dist"])[:limit]
 
 # ─────────────────────────────────────────────
 # HELPER — Call with retry
@@ -478,10 +489,12 @@ def hospitals(lat: float = Query(...), lng: float = Query(...), limit: int = 5, 
 # GET /api/services — ALL types: hospital + police + fire + towing
 # ─────────────────────────────────────────────
 @app.get("/api/services")
-def services(lat: float = Query(...), lng: float = Query(...), limit: int = 15, response: Response = None):
+def services(lat: float = Query(...), lng: float = Query(...), limit: int = 40, response: Response = None):
+    print(f"[ROADSoS] /api/services called: lat={lat}, lng={lng}")
     results = get_all_services(lat, lng, limit=limit)
+    print(f"[ROADSoS] /api/services returning {len(results)} services")
     if response:
-        response.headers["Cache-Control"] = "public, max-age=300"
+        response.headers["Cache-Control"] = "public, max-age=180"
     return {
         "status": "ok",
         "location": {"lat": lat, "lng": lng},
@@ -586,70 +599,72 @@ def detect_get(speed_kmh: float = 0, g_force: float = 0, tilt_deg: float = 0):
         "input": {"speed_kmh": speed_kmh, "g_force": g_force, "tilt_deg": tilt_deg},
         "analysis": result,
     }
-# ─────────────────────────────────────────────
-# NEW ENDPOINT — /api/places (Google Places API Proxy)
-# ─────────────────────────────────────────────
 @app.get("/api/places")
 async def get_places(lat: float, lng: float, radius: int = 8000):
-    if not GOOGLE_API_KEY:
-        return {"error": "GOOGLE_API_KEY not configured", "services": []}
-    
-    url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
-    
-    # We will search for 4 types: hospital, police, fire_station, car_repair (for towing)
-    # car_repair is the closest to towing available in Nearby Search types
-    types_mapping = {
-        "hospital": "hospital",
-        "police": "police",
-        "fire_station": "fire",
-        "car_repair": "towing"
-    }
-    
-    services = []
-    
-    for gtype, cat in types_mapping.items():
-        params = {
-            "location": f"{lat},{lng}",
-            "radius": radius,
-            "type": gtype,
-            "key": GOOGLE_API_KEY,
+    print(f"[ROADSoS] /api/places called: lat={lat}, lng={lng}, radius={radius}")
+
+    # ── Try Google Places API if key is available ──────────────────────────
+    if GOOGLE_API_KEY:
+        url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
+        types_mapping = {
+            "hospital": "hospital",
+            "police": "police",
+            "fire_station": "fire",
+            "car_repair": "towing"
         }
-        try:
-            res = requests.get(url, params=params, timeout=8)
-            data = res.json()
-            if data.get("status") == "OK" and data.get("results"):
-                for idx, h in enumerate(data["results"][:10]): # Top 10 of each
-                    hlat = h["geometry"]["location"]["lat"]
-                    hlng = h["geometry"]["location"]["lng"]
-                    
-                    # Generate a unique integer ID
-                    sid = hash(h.get("place_id", f"{cat}_{idx}")) % 1000000
-                    
-                    d = haversine_km(lat, lng, hlat, hlng)
-                    services.append({
-                        "id": sid,
-                        "name": h.get("name", "Unknown"),
-                        "category": cat,
-                        "address": h.get("vicinity", "Nearby"),
-                        "lat": hlat,
-                        "lng": hlng,
-                        "phone": h.get("formatted_phone_number", ""), # Nearby search rarely returns phone, but we keep the field
-                        "_dist": d * 1000, # Frontend expects meters in _dist
-                    })
-        except Exception as e:
-            print(f"Error fetching {gtype}: {e}")
-            pass
-            
-    # Fallback to Overpass if Google API fails (e.g. billing not enabled) or returns nothing
-    if not services:
-        overpass = get_services_from_overpass(lat, lng, radius)
-        # overpass returns distance_km, frontend needs _dist in meters
-        for s in overpass:
-            s["_dist"] = s.pop("distance_km", 0) * 1000
-            s["id"] = hash(s["name"]) % 1000000
-        services = overpass
-        
-    # Sort all by distance
-    services.sort(key=lambda x: x.get("_dist", 999999))
-    
-    return {"services": services}
+        services = []
+        for gtype, cat in types_mapping.items():
+            params = {
+                "location": f"{lat},{lng}",
+                "radius": radius,
+                "type": gtype,
+                "key": GOOGLE_API_KEY,
+            }
+            try:
+                res = requests.get(url, params=params, timeout=8)
+                data = res.json()
+                if data.get("status") == "OK" and data.get("results"):
+                    for idx, h in enumerate(data["results"][:10]):
+                        hlat = h["geometry"]["location"]["lat"]
+                        hlng = h["geometry"]["location"]["lng"]
+                        sid = hash(h.get("place_id", f"{cat}_{idx}")) % 1000000
+                        d = haversine_km(lat, lng, hlat, hlng)
+                        services.append({
+                            "id": sid,
+                            "name": h.get("name", "Unknown"),
+                            "category": cat,
+                            "address": h.get("vicinity", "Nearby"),
+                            "lat": hlat,
+                            "lng": hlng,
+                            "phone": h.get("formatted_phone_number", ""),
+                            "distance_km": round(d, 2),
+                            "_dist": d * 1000,
+                        })
+            except Exception as e:
+                print(f"[ROADSoS] Google Places error for {gtype}: {e}")
+        if services:
+            services.sort(key=lambda x: x.get("_dist", 999999))
+            print(f"[ROADSoS] /api/places returning {len(services)} Google results")
+            return {"services": services}
+
+    # ── No Google key (or Google returned nothing) → use Overpass ─────────
+    print("[ROADSoS] /api/places: No Google key or empty result, falling back to Overpass")
+    overpass = get_services_from_overpass(lat, lng, radius)
+    if overpass:
+        for i, s in enumerate(overpass):
+            s["_dist"] = s.get("distance_km", 0) * 1000
+            s["id"] = (hash(s["name"]) & 0x7FFFFFFF) % 900000 + 100
+        overpass.sort(key=lambda x: x.get("_dist", 999999))
+        print(f"[ROADSoS] /api/places returning {len(overpass)} Overpass results")
+        return {"services": overpass}
+
+    # ── Final fallback: static data sorted by distance ────────────────────
+    print("[ROADSoS] /api/places: Overpass also failed, returning static fallback")
+    for i, s in enumerate(FALLBACK_SERVICES):
+        d = haversine_km(lat, lng, s["lat"], s["lng"])
+        s["distance_km"] = round(d, 2)
+        s["_dist"] = d * 1000
+        s["id"] = s.get("id", 5000 + i)
+        s["eta_minutes"] = max(3, int((d / 40) * 60))
+    sorted_fallback = sorted(FALLBACK_SERVICES, key=lambda x: x["_dist"])
+    return {"services": sorted_fallback[:40]}

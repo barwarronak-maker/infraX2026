@@ -3070,14 +3070,21 @@ async function fetchNearby() {
   setStatus('loading', 'Refreshing...');
   showLoading('Fetching nearby emergency services…');
 
-  // STEP 2: Background refresh from backend (Google Maps API)
+  // STEP 2: Fetch real live data from backend (/api/services uses Overpass, no API key needed)
+  const apiUrl = `${API_BASE}/api/services?lat=${userLat}&lng=${userLng}&radius=${SEARCH_R}`;
+  console.log('[ROADSoS] Fetching services from:', apiUrl);
+
   try {
-    const resp = await fetch(`${API_BASE}/api/places?lat=${userLat}&lng=${userLng}&radius=${SEARCH_R}`, {
-      signal: AbortSignal.timeout(12000)
-    });
+    const resp = await fetch(apiUrl, { signal: AbortSignal.timeout(15000) });
+    console.log('[ROADSoS] Response status:', resp.status);
+
     if (!resp.ok) throw new Error(`Backend responded ${resp.status}`);
+
     const data = await resp.json();
+    console.log('[ROADSoS] API response:', data);
+
     const services = data.services || [];
+    console.log('[ROADSoS] Services count:', services.length);
 
     if (services.length > 0) {
       cacheServices(services);
@@ -3085,17 +3092,16 @@ async function fetchNearby() {
       setStatus('live', services.length + ' found');
       detectNearestHospitalFromOverpass(services);
     } else {
-      // Backend returned empty — stay on cached/fallback data
-      console.warn('[ROADSoS] Backend returned 0 services, using fallback.');
+      console.warn('[ROADSoS] Empty API response — using offline FALLBACK data');
       if (!allServices || allServices.length === 0) {
         renderServices(FALLBACK);
         setStatus('live', 'Showing offline data');
-        toast('⚠ Unable to fetch nearby services — showing offline data');
+        toast('⚠ No services found nearby — showing offline data');
       }
     }
   } catch (e) {
-    console.warn('[ROADSoS] Backend fetch failed:', e.message);
-    // Backend offline — use cached/fallback data already visible
+    console.error('[ROADSoS] Fetch error:', e.message);
+    // Backend offline or timed out — use cached/FALLBACK data
     if (!allServices || allServices.length === 0) {
       renderServices(FALLBACK);
       setStatus('offline', 'Offline data');
