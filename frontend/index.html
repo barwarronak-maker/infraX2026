@@ -2358,8 +2358,8 @@
 // ══════════════════════════════════════════════
 // CONFIG
 // ══════════════════════════════════════════════
-// The production backend URL (update this once your Render app is live)
-const API_BASE    = 'https://roadsos-backend.onrender.com';
+// Production backend URL on Render
+const API_BASE    = 'https://infrax2026.onrender.com';
 const OVERPASS    = 'https://overpass-api.de/api/interpreter';
 const NOMINATIM   = 'https://nominatim.openstreetmap.org';
 const DB_NAME     = 'roadsos-db';
@@ -2746,10 +2746,12 @@ async function flushSOSQueue() {
 function locateMe() {
   document.getElementById('locate-btn').classList.add('locating');
   setStatus('loading', 'Locating…');
+  showLoading('Getting your location…');
 
   if (!navigator.geolocation) {
     hideLoading();
-    toast('GPS not available — search a city above');
+    setStatus('offline', 'No GPS');
+    toast('GPS not supported by this browser — search a city above');
     loadFallback();
     return;
   }
@@ -2757,25 +2759,30 @@ function locateMe() {
   navigator.geolocation.getCurrentPosition(
     pos => {
       userLat = pos.coords.latitude;
-  updateRouteBtn();
       userLng = pos.coords.longitude;
       document.getElementById('locate-btn').classList.remove('locating');
+      hideLoading();
+      updateRouteBtn();
       placeUserPin(userLat, userLng);
       map.setView([userLat, userLng], 14);
       fetchNearby();        // Overpass handles ALL services + nearest hospital card
       updateSOSCoords();
-      // NOTE: loadNearestHospitalFromBackend() intentionally removed —
-      // backend static fallback can have wrong coords for distant cities.
-      // Overpass always returns real live data for the user's actual location.
     },
-    () => {
+    (err) => {
       document.getElementById('locate-btn').classList.remove('locating');
       hideLoading();
       setStatus('offline', 'No GPS');
-      toast('Location denied — search a city to find services');
+      console.warn('[ROADSoS] Geolocation error:', err.code, err.message);
+      if (err.code === 1) {
+        toast('📍 Location permission denied — please allow location access or search a city above');
+      } else if (err.code === 2) {
+        toast('📍 Location unavailable — search a city above to find nearby services');
+      } else {
+        toast('📍 Location timed out — search a city above');
+      }
       loadFallback();
     },
-    { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
   );
 }
 
@@ -3058,31 +3065,47 @@ async function fetchNearby() {
     showDetectCard('scanning');
   }
 
-  if (!isOnline) { setStatus('offline', 'Offline'); return; }
+  if (!isOnline) { setStatus('offline', 'Offline'); hideLoading(); return; }
 
   setStatus('loading', 'Refreshing...');
+  showLoading('Fetching nearby emergency services…');
 
-  // STEP 2: Silent background refresh from Google Maps API (via backend)
+  // STEP 2: Background refresh from backend (Google Maps API)
   try {
     const resp = await fetch(`${API_BASE}/api/places?lat=${userLat}&lng=${userLng}&radius=${SEARCH_R}`, {
-      signal: AbortSignal.timeout(8000)
+      signal: AbortSignal.timeout(12000)
     });
+    if (!resp.ok) throw new Error(`Backend responded ${resp.status}`);
     const data = await resp.json();
     const services = data.services || [];
 
     if (services.length > 0) {
-      // Remove fallback merging, use pure Google Maps results
       cacheServices(services);
       renderServices(services);
       setStatus('live', services.length + ' found');
-      detectNearestHospitalFromOverpass(services); // works the same, just finds first hospital
+      detectNearestHospitalFromOverpass(services);
+    } else {
+      // Backend returned empty — stay on cached/fallback data
+      console.warn('[ROADSoS] Backend returned 0 services, using fallback.');
+      if (!allServices || allServices.length === 0) {
+        renderServices(FALLBACK);
+        setStatus('live', 'Showing offline data');
+        toast('⚠ Unable to fetch nearby services — showing offline data');
+      }
     }
   } catch (e) {
-    // Overpass slow/offline — cached data already visible
+    console.warn('[ROADSoS] Backend fetch failed:', e.message);
+    // Backend offline — use cached/fallback data already visible
     if (!allServices || allServices.length === 0) {
-      setStatus('offline', 'No signal');
+      renderServices(FALLBACK);
+      setStatus('offline', 'Offline data');
+      toast('⚠ Unable to fetch nearby services — showing offline data');
       showDetectCard('hidden');
+    } else {
+      setStatus('live', allServices.length + ' (cached)');
     }
+  } finally {
+    hideLoading();
   }
   setStatus('live', allServices.length > 0 ? allServices.length + ' found' : 'Ready');
 }
@@ -4057,8 +4080,8 @@ window.addEventListener('appinstalled', () => {
 // ══════════════════════════════════════════════
 // LIVE ACCIDENT SIMULATION DEMO
 // ══════════════════════════════════════════════
-// The production backend URL (update this once your Render app is live)
-const DEMO_BACKEND = 'https://roadsos-backend.onrender.com';
+// Production backend URL on Render
+const DEMO_BACKEND = 'https://infrax2026.onrender.com';
 
 // ── Crash scenario definitions ───────────────
 const SCENARIOS = {
