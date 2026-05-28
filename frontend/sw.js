@@ -1,87 +1,109 @@
-const CACHE_NAME = 'roadsos-v4';
-const TILE_CACHE = 'roadsos-tiles-v1';
-const API_CACHE = 'roadsos-api-v1';
+// ── Cache version — bump this whenever you deploy to force a fresh install ──
+const CACHE_VERSION = 'v6';
+const CACHE_NAME    = `roadsos-${CACHE_VERSION}`;
+const TILE_CACHE    = `roadsos-tiles-${CACHE_VERSION}`;
+// NOTE: API responses are NEVER cached — always fetched fresh from the network.
 
 const APP_SHELL = [
-  './',
-  './index.html',
   './manifest.json',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
   'https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap',
+  // index.html is intentionally NOT in APP_SHELL — it is always fetched from the network.
 ];
 
-// Install — cache app shell
+// ── Install — pre-cache static assets only ─────────────────────────────────
 self.addEventListener('install', event => {
+  console.log(`[SW] Installing cache: ${CACHE_NAME}`);
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => cache.addAll(APP_SHELL))
-      .then(() => self.skipWaiting())
+      .then(() => self.skipWaiting())   // activate immediately, don't wait
   );
 });
 
-// Activate — clean old caches
+// ── Activate — delete ALL old caches so users always get fresh code ─────────
 self.addEventListener('activate', event => {
+  console.log(`[SW] Activating, clearing old caches`);
   event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(
-        keys.filter(k => k !== CACHE_NAME && k !== TILE_CACHE && k !== API_CACHE)
-            .map(k => caches.delete(k))
-      )
-    ).then(() => self.clients.claim())
+    caches.keys()
+      .then(keys => Promise.all(
+        keys.filter(k => k !== CACHE_NAME && k !== TILE_CACHE)
+            .map(k => {
+              console.log(`[SW] Deleting stale cache: ${k}`);
+              return caches.delete(k);
+            })
+      ))
+      .then(() => self.clients.claim())  // take control of existing pages
   );
 });
 
-// Fetch — stale-while-revalidate for tiles/API, cache-first for app shell
+// ── Fetch — smart routing ───────────────────────────────────────────────────
 self.addEventListener('fetch', event => {
-  const url = new URL(event.request.url);
+  const req = event.request;
+  const url = new URL(req.url);
 
-  // API Requests - Stale-while-revalidate
-  if (url.pathname.startsWith('/api/hospitals')) {
+  // 1. API calls (infrax2026.onrender.com or any /api/ path) — ALWAYS network, never cache
+  if (
+    url.hostname.includes('onrender.com') ||
+    url.hostname.includes('overpass-api.de') ||
+    url.hostname.includes('nominatim.openstreetmap.org') ||
+    url.pathname.startsWith('/api/')
+  ) {
     event.respondWith(
-      caches.open(API_CACHE).then(cache =>
-        cache.match(event.request).then(cached => {
-          const fetchPromise = fetch(event.request).then(response => {
-            if (response.ok) cache.put(event.request, response.clone());
-            return response;
-          }).catch(() => cached);
-          return cached || fetchPromise;
-        })
-      )
+      fetch(req).catch(() => {
+        // Network failed — return a graceful JSON error so the frontend can handle it
+        return new Response(
+          JSON.stringify({ error: 'offline', services: [] }),
+          { headers: { 'Content-Type': 'application/json' } }
+        );
+      })
     );
     return;
   }
 
-  // Map tiles — cache aggressively
+  // 2. Map tiles — cache aggressively (tiles don't change)
   if (url.hostname.includes('tile.openstreetmap.org')) {
     event.respondWith(
       caches.open(TILE_CACHE).then(cache =>
-        cache.match(event.request).then(cached => {
+        cache.match(req).then(cached => {
           if (cached) return cached;
-          return fetch(event.request).then(response => {
-            if (response.ok) cache.put(event.request, response.clone());
+          return fetch(req).then(response => {
+            if (response.ok) cache.put(req, response.clone());
             return response;
-          }).catch(() => cached);
+          });
         })
       )
     );
     return;
   }
 
-  // App shell — cache first, network fallback
+  // 3. index.html — NETWORK FIRST, fall back to cache
+  //    This ensures users always get the latest deployed code.
+  if (url.pathname === '/' || url.pathname.endsWith('index.html')) {
+    event.respondWith(
+      fetch(req)
+        .then(response => {
+          // Update cache with fresh copy
+          caches.open(CACHE_NAME).then(c => c.put(req, response.clone()));
+          return response;
+        })
+        .catch(() => caches.match(req))   // offline fallback
+    );
+    return;
+  }
+
+  // 4. Everything else (CSS, JS, fonts) — cache first, network fallback
   event.respondWith(
-    caches.match(event.request).then(cached => {
+    caches.match(req).then(cached => {
       if (cached) return cached;
-      return fetch(event.request).then(response => {
-        if (response.ok && event.request.method === 'GET' && !url.pathname.startsWith('/api/')) {
-          caches.open(CACHE_NAME).then(c => c.put(event.request, response.clone()));
+      return fetch(req).then(response => {
+        if (response.ok && req.method === 'GET') {
+          caches.open(CACHE_NAME).then(c => c.put(req, response.clone()));
         }
         return response;
       }).catch(() => {
-        // Full offline fallback for navigation
-        if (event.request.mode === 'navigate') {
-          return caches.match('./index.html');
-        }
+        if (req.mode === 'navigate') return caches.match('./index.html');
       });
     })
   );

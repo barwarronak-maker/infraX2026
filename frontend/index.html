@@ -1833,6 +1833,7 @@
       LIVE DEMO
     </button>
     <button id="install-pwa-btn" style="display: none;">⬇️ Install App</button>
+    <span id="build-tag" style="font-size:9px;opacity:0.35;letter-spacing:0.5px;font-family:monospace;user-select:none;">v6.1</span>
     <div id="status-pill" class="status-loading">Locating…</div>
   </div>
 </div>
@@ -2358,6 +2359,10 @@
 // ══════════════════════════════════════════════
 // CONFIG
 // ══════════════════════════════════════════════
+// ── Build Version (bump when deploying to confirm new code is live) ──
+const BUILD_VERSION = 'v6.1 · 2026-05-28';
+console.log(`[ROADSoS] Build ${BUILD_VERSION} loaded`);
+
 // Production backend URL on Render
 const API_BASE    = 'https://infrax2026.onrender.com';
 const OVERPASS    = 'https://overpass-api.de/api/interpreter';
@@ -4053,7 +4058,24 @@ function toast(msg) {
 // SERVICE WORKER
 // ══════════════════════════════════════════════
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  navigator.serviceWorker.register('sw.js')
+    .then(reg => {
+      console.log('[ROADSoS] Service Worker registered:', reg.scope);
+      // Check for a new SW version immediately (instead of waiting for next visit)
+      reg.update();
+      // When a new SW takes over, reload so users instantly get the fresh app
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        if (!newWorker) return;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'activated' && navigator.serviceWorker.controller) {
+            console.log('[ROADSoS] New service worker activated — reloading for fresh content');
+            window.location.reload();
+          }
+        });
+      });
+    })
+    .catch(err => console.warn('[ROADSoS] SW registration failed:', err));
 }
 
 let deferredPrompt;
