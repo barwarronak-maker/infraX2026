@@ -3970,80 +3970,146 @@ async function triggerWomenSOS() {
   const btn = document.getElementById('women-sos-btn');
   if (!btn) return;
 
-  // Haptic feedback
-  if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+  // Haptic feedback on mobile
+  if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 300]);
 
-  btn.textContent = '⏳ Getting location…';
-  btn.disabled = true;
-  btn.style.opacity = '0.7';
+  btn.innerHTML = '⏳ Getting location&hellip;';
+  btn.disabled  = true;
+  btn.style.opacity = '0.75';
 
-  // Get live location
   if (!navigator.geolocation) {
-    toast('📍 GPS not available — cannot send Women SOS');
-    btn.textContent = '🚨 Women Safety SOS';
-    btn.disabled = false;
-    btn.style.opacity = '1';
+    toast('📍 GPS not available — cannot send Women Safety SOS');
+    _resetWomenBtn(btn);
     return;
   }
 
   navigator.geolocation.getCurrentPosition(
     async (pos) => {
-      const lat = pos.coords.latitude;
-      const lng = pos.coords.longitude;
+      const lat      = pos.coords.latitude;
+      const lng      = pos.coords.longitude;
       const mapsLink = `https://maps.google.com/?q=${lat},${lng}`;
 
-      btn.textContent = '📡 Sending alerts…';
+      console.log('[ROADSoS] Women SOS triggered', lat, lng);
 
+      // ── Show channel status panel ──────────────────────────────────────
+      btn.innerHTML = `
+        <div style="width:100%;text-align:left;font-size:12px;line-height:1.8;">
+          <div style="font-size:14px;font-weight:800;margin-bottom:6px;">🚨 Women Safety SOS — Sending…</div>
+          <div id="wch-call" style="opacity:0.5;">📞 Emergency Call&nbsp;&nbsp;<span id="wch-call-s">⏳ Pending</span></div>
+          <div id="wch-sms"  style="opacity:0.5;">💬 SMS Alert&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span id="wch-sms-s">⏳ Pending</span></div>
+          <div id="wch-wa"   style="opacity:0.5;">📲 WhatsApp Alert&nbsp;&nbsp;<span id="wch-wa-s">⏳ Pending</span></div>
+        </div>`;
+
+      const payload = JSON.stringify({ lat, lng });
+      const headers = { 'Content-Type': 'application/json' };
+      const timeout = 20000;
+
+      // Helper to update per-channel status in UI
+      const updateStatus = (id, statusEl, ok, label) => {
+        const row = document.getElementById(id);
+        const sp  = document.getElementById(statusEl);
+        if (!row || !sp) return;
+        row.style.opacity = '1';
+        if (ok) {
+          sp.textContent = '✅ Sent';
+          sp.style.color = '#4caf50';
+        } else {
+          sp.textContent = '❌ Failed';
+          sp.style.color = '#ef5350';
+        }
+      };
+
+      // ── Fire all three channels in PARALLEL ───────────────────────────
+      const [callRes, smsRes, waRes] = await Promise.allSettled([
+        fetch(`${API_BASE}/women-sos-call`, { method:'POST', headers, body: payload, signal: AbortSignal.timeout(timeout) }),
+        fetch(`${API_BASE}/women-sos-sms`,  { method:'POST', headers, body: payload, signal: AbortSignal.timeout(timeout) }),
+        fetch(`${API_BASE}/women-sos-whatsapp`, { method:'POST', headers, body: payload, signal: AbortSignal.timeout(timeout) }),
+      ]);
+
+      // ── Process Call result ───────────────────────────────────────────
+      let callOk = false, smsOk = false, waOk = false;
       try {
-        const res = await fetch(`${API_BASE}/api/women-sos`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ lat, lng }),
-          signal: AbortSignal.timeout(20000),
-        });
-        const data = await res.json();
-        console.log('[ROADSoS] Women SOS response:', data);
+        if (callRes.status === 'fulfilled') {
+          const d = await callRes.value.json();
+          console.log('[ROADSoS] Women SOS CALL response:', d);
+          callOk = d.status === 'success';
+        }
+      } catch(e) { console.error('[ROADSoS] Women SOS call parse error:', e); }
+      updateStatus('wch-call', 'wch-call-s', callOk, 'Call');
 
-        btn.textContent = '✅ Women SOS Sent!';
-        btn.style.background = 'linear-gradient(135deg,#2e7d32,#43a047)';
+      // ── Process SMS result ────────────────────────────────────────────
+      try {
+        if (smsRes.status === 'fulfilled') {
+          const d = await smsRes.value.json();
+          console.log('[ROADSoS] Women SOS SMS response:', d);
+          smsOk = d.status === 'success';
+        }
+      } catch(e) { console.error('[ROADSoS] Women SOS SMS parse error:', e); }
+      updateStatus('wch-sms', 'wch-sms-s', smsOk, 'SMS');
+
+      // ── Process WhatsApp result ───────────────────────────────────────
+      try {
+        if (waRes.status === 'fulfilled') {
+          const d = await waRes.value.json();
+          console.log('[ROADSoS] Women SOS WhatsApp response:', d);
+          waOk = d.status === 'success';
+        }
+      } catch(e) { console.error('[ROADSoS] Women SOS WA parse error:', e); }
+      updateStatus('wch-wa', 'wch-wa-s', waOk, 'WhatsApp');
+
+      const anySuccess = callOk || smsOk || waOk;
+
+      if (anySuccess) {
         toast('🚨 Women Safety SOS sent to all contacts!');
-
-        // Also open WhatsApp with the message as a fallback
-        const msg = encodeURIComponent(`🚨 SOS ALERT! I need help. My live location: ${mapsLink}`);
+        // Also trigger native share so location goes via personal channels too
         setTimeout(() => {
           if (navigator.share) {
-            navigator.share({ title: 'Women Safety SOS', text: `🚨 SOS ALERT! I need help. Location: ${mapsLink}` }).catch(() => {});
+            navigator.share({
+              title: 'Women Safety SOS',
+              text:  `🚨 SOS ALERT! I need help. My live location: ${mapsLink}`
+            }).catch(() => {});
           }
-          // Reset button after 5 seconds
-          setTimeout(() => {
-            btn.textContent = '🚨 Women Safety SOS';
-            btn.style.background = 'linear-gradient(135deg,#c2185b,#e91e63)';
-            btn.disabled = false;
-            btn.style.opacity = '1';
-          }, 5000);
-        }, 1500);
-
-      } catch (e) {
-        console.error('[ROADSoS] Women SOS backend error:', e.message);
-        // Backend offline — send via native share / WhatsApp directly
-        const msg = encodeURIComponent(`🚨 SOS ALERT! I need help. My live location: ${mapsLink}`);
+        }, 1000);
+      } else {
+        // ALL channels failed — backend offline, open WhatsApp directly
+        console.error('[ROADSoS] All Women SOS channels failed — using WhatsApp fallback');
+        const msg = encodeURIComponent(`🚨 SOS ALERT! I need help. My live location: ${mapsLink} — Women Safety Emergency`);
         window.open(`https://wa.me/?text=${msg}`, '_blank');
         toast('⚠ Backend offline — opened WhatsApp for manual SOS');
-        btn.textContent = '🚨 Women Safety SOS';
-        btn.style.opacity = '1';
-        btn.disabled = false;
       }
+
+      // Show final summary then reset after 6s
+      setTimeout(() => {
+        btn.innerHTML = anySuccess
+          ? '✅ Women SOS Sent Successfully'
+          : '❌ Failed — Check contacts or retry';
+        btn.style.background = anySuccess
+          ? 'linear-gradient(135deg,#2e7d32,#43a047)'
+          : 'linear-gradient(135deg,#b71c1c,#e53935)';
+        setTimeout(() => _resetWomenBtn(btn), 6000);
+      }, 500);
     },
     (err) => {
-      console.error('[ROADSoS] Women SOS geolocation error:', err.code);
-      toast('📍 Could not get location — please enable GPS');
-      btn.textContent = '🚨 Women Safety SOS';
-      btn.disabled = false;
-      btn.style.opacity = '1';
+      console.error('[ROADSoS] Women SOS geolocation error:', err.code, err.message);
+      const msgs = {
+        1: '📍 Location permission denied — please allow GPS access',
+        2: '📍 Location unavailable — check your GPS signal',
+        3: '📍 Location timed out — try again',
+      };
+      toast(msgs[err.code] || '📍 Could not get location');
+      _resetWomenBtn(btn);
     },
-    { enableHighAccuracy: true, timeout: 10000 }
+    { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
   );
 }
+
+function _resetWomenBtn(btn) {
+  btn.innerHTML = '🚨 Women Safety SOS';
+  btn.style.background = 'linear-gradient(135deg,#c2185b,#e91e63)';
+  btn.style.opacity = '1';
+  btn.disabled = false;
+}
+
 
 // ══════════════════════════════════════════════
 // AI TRIAGE

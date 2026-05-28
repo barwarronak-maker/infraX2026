@@ -684,3 +684,121 @@ def detect_get(speed_kmh: float = 0, g_force: float = 0, tilt_deg: float = 0):
         "input":  {"speed_kmh": speed_kmh, "g_force": g_force, "tilt_deg": tilt_deg},
         "analysis": result,
     }
+
+# ══════════════════════════════════════════════════════════════════════════════
+# WOMEN SOS — DEDICATED CHANNEL ENDPOINTS (fired in parallel by frontend)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _women_sos_messages(lat: float, lng: float) -> dict:
+    """Build all Women SOS message strings from a lat/lng pair."""
+    maps_link = f"https://maps.google.com/?q={lat},{lng}"
+    return {
+        "maps_link": maps_link,
+        "whatsapp": (
+            f"🚨 WOMEN SAFETY SOS ALERT!\n\n"
+            f"I need help immediately!\n"
+            f"📍 My live location: {maps_link}\n"
+            f"📞 Coordinates: {lat:.5f}, {lng:.5f}\n\n"
+            f"Please call me or contact police immediately.\n"
+            f"Pink Police / Women Helpline: {PINK_POLICE_NUM}\n\n"
+            f"_Sent automatically via ROADSoS Women Safety SOS_"
+        ),
+        "sms": (
+            f"🚨 SOS ALERT! I need help. "
+            f"My live location: {maps_link} "
+            f"— Women Safety Emergency. "
+            f"Call {PINK_POLICE_NUM} (Women Helpline)"
+        )[:160],
+        "voice": (
+            f"EMERGENCY. Women Safety SOS Alert from ROADSoS. "
+            f"The person needs immediate help. "
+            f"Live location: {maps_link}. "
+            f"Contact Pink Police at {PINK_POLICE_NUM}."
+        ),
+    }
+
+
+# ─────────────────────────────────────────────
+# POST /women-sos-call  — Voice calls only
+# ─────────────────────────────────────────────
+@app.post("/women-sos-call")
+def women_sos_call(req: WomenSOSRequest):
+    """Trigger Twilio voice calls to family contacts + Pink Police."""
+    log.info(f"Women SOS CALL: lat={req.lat} lng={req.lng}")
+    msgs    = _women_sos_messages(req.lat, req.lng)
+    targets = req.contacts if req.contacts else FAMILY_CONTACTS
+    results = []
+
+    for num in targets:
+        res = _call_with_retry(num, msgs["voice"], retries=2)
+        results.append(res)
+
+    overall = "success" if any(r["status"] == "success" for r in results) else "failed"
+    log.info(f"Women SOS CALL result: {overall} for {len(targets)} contacts")
+    return {
+        "status":    overall,
+        "channel":   "call",
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "location":  {"lat": req.lat, "lng": req.lng, "maps_url": msgs["maps_link"]},
+        "results":   results,
+    }
+
+
+# ─────────────────────────────────────────────
+# POST /women-sos-sms  — SMS only
+# ─────────────────────────────────────────────
+@app.post("/women-sos-sms")
+def women_sos_sms(req: WomenSOSRequest):
+    """Send Twilio SMS to family contacts."""
+    log.info(f"Women SOS SMS: lat={req.lat} lng={req.lng}")
+    msgs    = _women_sos_messages(req.lat, req.lng)
+    targets = req.contacts if req.contacts else FAMILY_CONTACTS
+    results = []
+
+    for num in targets:
+        try:
+            sid = send_sms(num, msgs["sms"])
+            log.info(f"SMS sent to {num}: sid={sid}")
+            results.append({"number": num, "status": "sent", "sid": sid})
+        except Exception as e:
+            log.error(f"Women SOS SMS error for {num}: {e}")
+            results.append({"number": num, "status": "failed", "error": str(e)})
+
+    overall = "success" if any(r["status"] == "sent" for r in results) else "failed"
+    return {
+        "status":    overall,
+        "channel":   "sms",
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "location":  {"lat": req.lat, "lng": req.lng, "maps_url": msgs["maps_link"]},
+        "results":   results,
+    }
+
+
+# ─────────────────────────────────────────────
+# POST /women-sos-whatsapp  — WhatsApp only
+# ─────────────────────────────────────────────
+@app.post("/women-sos-whatsapp")
+def women_sos_whatsapp(req: WomenSOSRequest):
+    """Send Twilio WhatsApp messages to family contacts."""
+    log.info(f"Women SOS WhatsApp: lat={req.lat} lng={req.lng}")
+    msgs    = _women_sos_messages(req.lat, req.lng)
+    targets = req.contacts if req.contacts else FAMILY_CONTACTS
+    results = []
+
+    for num in targets:
+        try:
+            sid = send_whatsapp(num, msgs["whatsapp"])
+            log.info(f"WhatsApp sent to {num}: sid={sid}")
+            results.append({"number": num, "status": "sent", "sid": sid})
+        except Exception as e:
+            log.error(f"Women SOS WhatsApp error for {num}: {e}")
+            results.append({"number": num, "status": "failed", "error": str(e)})
+
+    overall = "success" if any(r["status"] == "sent" for r in results) else "failed"
+    return {
+        "status":    overall,
+        "channel":   "whatsapp",
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "location":  {"lat": req.lat, "lng": req.lng, "maps_url": msgs["maps_link"]},
+        "results":   results,
+    }
