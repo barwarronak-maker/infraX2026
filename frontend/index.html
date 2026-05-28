@@ -1970,6 +1970,16 @@
       <div id="sos-press-bar"></div>
     </button>
 
+    <!-- Women Safety SOS Button -->
+    <button id="women-sos-btn" onclick="triggerWomenSOS()"
+      style="width:100%;margin-top:10px;padding:14px 18px;border:none;border-radius:12px;
+             background:linear-gradient(135deg,#c2185b,#e91e63);color:#fff;
+             font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;
+             letter-spacing:0.5px;display:flex;align-items:center;justify-content:center;
+             gap:8px;box-shadow:0 4px 20px rgba(233,30,99,0.4);transition:transform 0.15s,box-shadow 0.15s;">
+      🚨 Women Safety SOS
+    </button>
+
     <!-- SOS Event Log -->
     <div id="sos-log-wrap">
       <div class="sos-log-title">Recent SOS Events</div>
@@ -3952,6 +3962,88 @@ function renderSOSLog() {
 // Legacy stubs (kept for backward compat)
 function triggerBackendSOS() { openSOS(); }
 function showNearestInModal(h) { updateSOSHospitalInfo(h); }
+
+// ══════════════════════════════════════════════
+// WOMEN SAFETY SOS
+// ══════════════════════════════════════════════
+async function triggerWomenSOS() {
+  const btn = document.getElementById('women-sos-btn');
+  if (!btn) return;
+
+  // Haptic feedback
+  if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+
+  btn.textContent = '⏳ Getting location…';
+  btn.disabled = true;
+  btn.style.opacity = '0.7';
+
+  // Get live location
+  if (!navigator.geolocation) {
+    toast('📍 GPS not available — cannot send Women SOS');
+    btn.textContent = '🚨 Women Safety SOS';
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      const mapsLink = `https://maps.google.com/?q=${lat},${lng}`;
+
+      btn.textContent = '📡 Sending alerts…';
+
+      try {
+        const res = await fetch(`${API_BASE}/api/women-sos`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lat, lng }),
+          signal: AbortSignal.timeout(20000),
+        });
+        const data = await res.json();
+        console.log('[ROADSoS] Women SOS response:', data);
+
+        btn.textContent = '✅ Women SOS Sent!';
+        btn.style.background = 'linear-gradient(135deg,#2e7d32,#43a047)';
+        toast('🚨 Women Safety SOS sent to all contacts!');
+
+        // Also open WhatsApp with the message as a fallback
+        const msg = encodeURIComponent(`🚨 SOS ALERT! I need help. My live location: ${mapsLink}`);
+        setTimeout(() => {
+          if (navigator.share) {
+            navigator.share({ title: 'Women Safety SOS', text: `🚨 SOS ALERT! I need help. Location: ${mapsLink}` }).catch(() => {});
+          }
+          // Reset button after 5 seconds
+          setTimeout(() => {
+            btn.textContent = '🚨 Women Safety SOS';
+            btn.style.background = 'linear-gradient(135deg,#c2185b,#e91e63)';
+            btn.disabled = false;
+            btn.style.opacity = '1';
+          }, 5000);
+        }, 1500);
+
+      } catch (e) {
+        console.error('[ROADSoS] Women SOS backend error:', e.message);
+        // Backend offline — send via native share / WhatsApp directly
+        const msg = encodeURIComponent(`🚨 SOS ALERT! I need help. My live location: ${mapsLink}`);
+        window.open(`https://wa.me/?text=${msg}`, '_blank');
+        toast('⚠ Backend offline — opened WhatsApp for manual SOS');
+        btn.textContent = '🚨 Women Safety SOS';
+        btn.style.opacity = '1';
+        btn.disabled = false;
+      }
+    },
+    (err) => {
+      console.error('[ROADSoS] Women SOS geolocation error:', err.code);
+      toast('📍 Could not get location — please enable GPS');
+      btn.textContent = '🚨 Women Safety SOS';
+      btn.disabled = false;
+      btn.style.opacity = '1';
+    },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+}
 
 // ══════════════════════════════════════════════
 // AI TRIAGE

@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: roadsos-backend
+    name: infrax2026
     env: python
     rootDir: backend
     buildCommand: "pip install -r requirements.txt"
@@ -8,3 +8,10 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
+      # ── Set these in Render Dashboard → Environment ──────────────────────────
+      # GOOGLE_API_KEY         → your Google Cloud Places API key
+      # TWILIO_ACCOUNT_SID     → from twilio.com/console
+      # TWILIO_AUTH_TOKEN      → from twilio.com/console
+      # TWILIO_PHONE_NUMBER    → e.g. +12525842291
+      # FROM_WHATSAPP          → whatsapp:+14155238886 (sandbox) or your number
+      # PINK_POLICE_NUMBER     → 1091 (default women helpline India)
