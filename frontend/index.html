@@ -3090,11 +3090,11 @@ function highlightNearestOnMap(h) {
 async function fetchNearby() {
   if (!userLat) return;
 
-  // STEP 1: Show cached/fallback data INSTANTLY — zero wait time
+  // STEP 1: Show cached data INSTANTLY — zero wait time
   nearestHospital = null;
   const { services: cached } = await getCachedServices();
 
-  // Only use cached entries that are near current location (prevents stale cross-city cache)
+  // Only use cached entries near current location
   const nearbyCached = cached.filter(s => dist(userLat, userLng, s.lat, s.lng) < 25000);
   if (nearbyCached.length > 0) {
     renderServices(nearbyCached);
@@ -3102,26 +3102,34 @@ async function fetchNearby() {
     setStatus('live', nearbyCached.length + ' found');
     hideLoading();
   } else {
-    // No static fallback — show scanning state and wait for Overpass
+    // Show scanning state while fetching
     showDetectCard('scanning');
   }
 
   if (!isOnline) { setStatus('offline', 'Offline'); hideLoading(); return; }
 
   setStatus('loading', 'Refreshing...');
-  showLoading('Fetching nearby emergency services…');
+  showLoading('Fetching nearby services...');
 
-  // STEP 2: Fetch real live data from backend (/api/services uses Overpass, no API key needed)
-  const apiUrl = `${API_BASE}/api/services?lat=${userLat}&lng=${userLng}&radius=${SEARCH_R}`;
+  // Render cold start UI handling
+  const coldStartTimer = setTimeout(() => {
+    showLoading('Waking up server, please wait...');
+  }, 5000);
+
+  // STEP 2: Fetch parallel live data from backend (/api/nearby-all)
+  const apiUrl = `${API_BASE}/api/nearby-all?lat=${userLat}&lng=${userLng}&radius=2000`;
   console.log('[ROADSoS] Fetching services from:', apiUrl);
 
+  console.time("API");
   try {
-    const resp = await fetch(apiUrl, { signal: AbortSignal.timeout(15000) });
+    const resp = await fetch(apiUrl, { signal: AbortSignal.timeout(20000) });
+    clearTimeout(coldStartTimer);
     console.log('[ROADSoS] Response status:', resp.status);
 
     if (!resp.ok) throw new Error(`Backend responded ${resp.status}`);
 
     const data = await resp.json();
+    console.timeEnd("API");
     console.log('[ROADSoS] API response:', data);
 
     const services = data.services || [];
@@ -3133,20 +3141,20 @@ async function fetchNearby() {
       setStatus('live', services.length + ' found');
       detectNearestHospitalFromOverpass(services);
     } else {
-      console.warn('[ROADSoS] Empty API response — using offline FALLBACK data');
+      console.warn('[ROADSoS] Empty API response');
       if (!allServices || allServices.length === 0) {
-        renderServices(FALLBACK);
-        setStatus('live', 'Showing offline data');
-        toast('⚠ No services found nearby — showing offline data');
+        showDetectCard('hidden');
       }
     }
   } catch (e) {
+    clearTimeout(coldStartTimer);
+    console.timeEnd("API");
     console.error('[ROADSoS] Fetch error:', e.message);
-    // Backend offline or timed out — use cached/FALLBACK data
+    
+    // Completely removed FALLBACK logic
     if (!allServices || allServices.length === 0) {
-      renderServices(FALLBACK);
-      setStatus('offline', 'Offline data');
-      toast('⚠ Unable to fetch nearby services — showing offline data');
+      setStatus('offline', 'Connection Error');
+      toast('⚠ Unable to fetch services. Please check connection.');
       showDetectCard('hidden');
     } else {
       setStatus('live', allServices.length + ' (cached)');
@@ -3154,7 +3162,6 @@ async function fetchNearby() {
   } finally {
     hideLoading();
   }
-  setStatus('live', allServices.length > 0 ? allServices.length + ' found' : 'Ready');
 }
 
 function parseOverpass(elements) {

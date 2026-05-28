@@ -8,6 +8,7 @@ import os
 import uuid
 import requests
 import logging
+import asyncio
 
 from dotenv import load_dotenv
 load_dotenv()  # Load .env before anything reads os.getenv()
@@ -59,6 +60,8 @@ FAMILY_CONTACTS = [
 # ─────────────────────────────────────────────
 sos_events: List[dict] = []
 active_sos: Optional[dict] = None
+service_cache: dict = {}
+CACHE_TTL_SEC = 180
 
 # ─────────────────────────────────────────────
 # PYDANTIC MODELS
@@ -465,16 +468,30 @@ def towing_endpoint(
 # ─────────────────────────────────────────────
 # GET /api/services  (all types in one call)
 # ─────────────────────────────────────────────
+@app.get("/api/nearby-all")
 @app.get("/api/services")
-def services_endpoint(
+async def services_endpoint(
     lat: float = Query(...),
     lng: float = Query(...),
-    radius: int = Query(8000),
+    radius: int = Query(2000),
     response: Response = None,
 ):
-    log.info(f"/api/services lat={lat} lng={lng}")
+    t0 = time.time()
+    
+    # ── 1. Cache Check ──
+    cache_key = f"{round(lat, 2)}_{round(lng, 2)}_{radius}"
+    cached = service_cache.get(cache_key)
+    if cached:
+        cached_time, cached_data = cached
+        if t0 - cached_time < CACHE_TTL_SEC:
+            log.info(f"/api/nearby-all [CACHED] lat={lat} lng={lng}")
+            if response:
+                response.headers["Cache-Control"] = f"public, max-age={CACHE_TTL_SEC}"
+            return cached_data
 
-    # Try Google Places for all types
+    log.info(f"/api/nearby-all [LIVE] lat={lat} lng={lng} radius={radius}")
+
+    # ── 2. Parallel Google Places Fetch ──
     if GOOGLE_API_KEY:
         type_map = {
             "hospital":    "hospital",
@@ -482,31 +499,51 @@ def services_endpoint(
             "fire_station":"fire",
             "car_repair":  "towing",
         }
+        
+        tasks = [
+            asyncio.to_thread(_google_nearby, lat, lng, gtype, radius)
+            for gtype in type_map.keys()
+        ]
+        results = await asyncio.gather(*tasks)
+        
         all_services = []
-        for gtype, cat in type_map.items():
-            raw = _google_nearby(lat, lng, gtype, radius)
-            for r in raw[:10]:
-                all_services.append(_google_to_service(r, cat, lat, lng))
-
+        for i, cat in enumerate(type_map.values()):
+            raw_results = results[i]
+            cat_services = [_google_to_service(r, cat, lat, lng) for r in raw_results]
+            cat_services.sort(key=lambda x: x["distance_km"])
+            all_services.extend(cat_services[:5])  # Top 5 per category
+        
         if all_services:
             all_services.sort(key=lambda x: x["distance_km"])
-            log.info(f"/api/services Google returned {len(all_services)} total")
+            response_data = {"status": "ok", "source": "google", "count": len(all_services), "services": all_services}
+            service_cache[cache_key] = (t0, response_data)
+            time_taken = round((time.time() - t0) * 1000)
+            print(f"API response time: {time_taken} ms (Google)")
             if response:
-                response.headers["Cache-Control"] = "public, max-age=180"
-            return {"status": "ok", "source": "google", "count": len(all_services), "services": all_services}
+                response.headers["Cache-Control"] = f"public, max-age={CACHE_TTL_SEC}"
+            return response_data
 
-    # Fall back to Overpass (free, no key)
-    op = _overpass_services(lat, lng, radius)
+    # ── 3. Fallback to Overpass (Parallel) ──
+    op = await asyncio.to_thread(_overpass_services, lat, lng, radius)
     if op:
-        log.info(f"/api/services Overpass returned {len(op)} total")
+        # Group by category and limit top 5
+        cat_counts = {"hospital": 0, "police": 0, "fire": 0, "towing": 0}
+        limited_op = []
+        for s in op:
+            c = s["category"]
+            if cat_counts.get(c, 0) < 5:
+                limited_op.append(s)
+                cat_counts[c] = cat_counts.get(c, 0) + 1
+                
+        response_data = {"status": "ok", "source": "overpass", "count": len(limited_op), "services": limited_op}
+        service_cache[cache_key] = (t0, response_data)
+        time_taken = round((time.time() - t0) * 1000)
+        print(f"API response time: {time_taken} ms (Overpass)")
         if response:
-            response.headers["Cache-Control"] = "public, max-age=180"
-        return {"status": "ok", "source": "overpass", "count": len(op), "services": op}
+            response.headers["Cache-Control"] = f"public, max-age={CACHE_TTL_SEC}"
+        return response_data
 
-    raise HTTPException(
-        status_code=503,
-        detail="Unable to fetch real-time services. No data from Google or Overpass."
-    )
+    raise HTTPException(status_code=503, detail="Unable to fetch real-time services. No data from Google or Overpass.")
 
 # ─────────────────────────────────────────────
 # GET /api/places  (alias kept for backward compat)
