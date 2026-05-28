@@ -181,7 +181,8 @@ out center;"""
         "car_repair":  "towing",
     }
     try:
-        res  = requests.post("https://overpass-api.de/api/interpreter", data=query, timeout=12)
+        headers = {"User-Agent": "ROADSoS/1.0 (Emergency Response App)"}
+        res  = requests.post("https://overpass-api.de/api/interpreter", data=query, headers=headers, timeout=12)
         data = res.json()
         seen, services = set(), []
         for el in data.get("elements", []):
