@@ -2512,94 +2512,120 @@ function updateDashboardHospital() {
 }
 
 // ══════════════════════════════════════════════
-// OFFLINE FALLBACK DATA (20 real entries)
+// NATIONAL EMERGENCY NUMBERS (always shown at top)
 // ══════════════════════════════════════════════
-const FALLBACK = [
-  // Pune
-  {id:1,  name:"Sassoon General Hospital",      category:"hospital", lat:18.5178, lng:73.8543, phone:"02026120009", address:"Pune, Maharashtra",    city:"Pune"},
-  {id:2,  name:"KEM Hospital Pune",             category:"hospital", lat:18.512,  lng:73.8553, phone:"02026128000", address:"Rasta Peth, Pune",      city:"Pune"},
-  {id:3,  name:"Ruby Hall Clinic",              category:"hospital", lat:18.5320, lng:73.8820, phone:"02026163391", address:"Wanowrie, Pune",         city:"Pune"},
-  {id:4,  name:"Jehangir Hospital",             category:"hospital", lat:18.5289, lng:73.8750, phone:"02026051000", address:"Nagar Road, Pune",       city:"Pune"},
-  {id:5,  name:"Deenanath Mangeshkar Hospital", category:"hospital", lat:18.5122, lng:73.8288, phone:"02020660606", address:"Erandwane, Pune",        city:"Pune"},
-  {id:6,  name:"Pune Police Headquarters",      category:"police",   lat:18.5195, lng:73.8553, phone:"100",         address:"Shivajinagar, Pune",     city:"Pune"},
-  {id:7,  name:"Deccan Fire Station",           category:"fire",     lat:18.5201, lng:73.8452, phone:"101",         address:"Deccan Gymkhana, Pune",  city:"Pune"},
-  {id:8,  name:"Pune Towing Services",          category:"towing",   lat:18.5200, lng:73.8500, phone:"02025536298", address:"Central Pune",           city:"Pune"},
-
-  // Delhi
-  {id:9,  name:"AIIMS Delhi",                   category:"hospital", lat:28.5672, lng:77.2100, phone:"01126588500", address:"Ansari Nagar, Delhi",    city:"Delhi"},
-  {id:10, name:"Safdarjung Hospital",           category:"hospital", lat:28.5674, lng:77.2090, phone:"01126707444", address:"New Delhi",              city:"Delhi"},
-  {id:11, name:"RML Hospital Delhi",            category:"hospital", lat:28.6237, lng:77.2090, phone:"01123404321", address:"Connaught Place, Delhi", city:"Delhi"},
-  {id:12, name:"Delhi Police HQ",               category:"police",   lat:28.6304, lng:77.2177, phone:"100",         address:"ITO, New Delhi",         city:"Delhi"},
-  {id:13, name:"Connaught Place Fire Station",  category:"fire",     lat:28.6315, lng:77.2167, phone:"101",         address:"Connaught Place, Delhi", city:"Delhi"},
-  {id:14, name:"Delhi Traffic Police Towing",   category:"towing",   lat:28.6300, lng:77.2150, phone:"01125844444", address:"New Delhi",              city:"Delhi"},
-
-  // Mumbai
-  {id:15, name:"KEM Hospital Mumbai",           category:"hospital", lat:18.9990, lng:72.8418, phone:"02224107000", address:"Parel, Mumbai",          city:"Mumbai"},
-  {id:16, name:"Nair Hospital Mumbai",          category:"hospital", lat:18.9647, lng:72.8258, phone:"02223027600", address:"Mumbai Central",         city:"Mumbai"},
-  {id:17, name:"Mumbai Police",                 category:"police",   lat:18.9322, lng:72.8418, phone:"100",         address:"Crawford Market, Mumbai",city:"Mumbai"},
-  {id:18, name:"Byculla Fire Brigade",          category:"fire",     lat:18.9750, lng:72.8350, phone:"101",         address:"Byculla, Mumbai",        city:"Mumbai"},
-  {id:19, name:"Western Express Towing",        category:"towing",   lat:19.0500, lng:72.8500, phone:"02228892222", address:"Bandra, Mumbai",         city:"Mumbai"},
-
-  // Bengaluru
-  {id:20, name:"St. Johns Medical College",     category:"hospital", lat:12.9250, lng:77.6120, phone:"08022064000", address:"Koramangala, Bengaluru", city:"Bengaluru"},
-  {id:21, name:"Bowring Hospital Bengaluru",    category:"hospital", lat:12.9716, lng:77.5946, phone:"08025571100", address:"Shivajinagar, Bengaluru",city:"Bengaluru"},
-  {id:22, name:"Bengaluru City Police",         category:"police",   lat:12.9779, lng:77.5952, phone:"100",         address:"Infantry Road, Bengaluru",city:"Bengaluru"},
-  {id:23, name:"Bengaluru Fire Services",       category:"fire",     lat:12.9750, lng:77.5900, phone:"101",         address:"Central, Bengaluru",     city:"Bengaluru"},
-  {id:24, name:"Nandi Towing Services",         category:"towing",   lat:12.9700, lng:77.6000, phone:"08022221111", address:"MG Road, Bengaluru",     city:"Bengaluru"},
-
-  // Chennai
-  {id:25, name:"Govt Stanley Hospital Chennai", category:"hospital", lat:13.0827, lng:80.2707, phone:"04425281232", address:"Old Jail Road, Chennai", city:"Chennai"},
-  {id:26, name:"Apollo Hospitals Greams Road",  category:"hospital", lat:13.0604, lng:80.2496, phone:"04428290200", address:"Greams Road, Chennai",   city:"Chennai"},
-  {id:27, name:"Chennai Police HQ",             category:"police",   lat:13.0418, lng:80.2773, phone:"100",         address:"Mylapore, Chennai",      city:"Chennai"},
-  {id:28, name:"Chennai Fire Brigade",          category:"fire",     lat:13.0500, lng:80.2700, phone:"101",         address:"Egmore, Chennai",        city:"Chennai"},
-  {id:29, name:"Chennai Traffic Towing",        category:"towing",   lat:13.0600, lng:80.2600, phone:"04423452365", address:"Mount Road, Chennai",    city:"Chennai"},
-
-  // Hyderabad
-  {id:30, name:"Osmania General Hospital",      category:"hospital", lat:17.3804, lng:78.4716, phone:"04024600146", address:"Afzal Gunj, Hyderabad",  city:"Hyderabad"},
-  {id:31, name:"Gandhi Hospital",               category:"hospital", lat:17.4241, lng:78.5028, phone:"04027702222", address:"Secunderabad",           city:"Hyderabad"},
-  {id:32, name:"Hyderabad Police HQ",           category:"police",   lat:17.3990, lng:78.4760, phone:"100",         address:"Basheerbagh, Hyderabad", city:"Hyderabad"},
-  {id:33, name:"Hyderabad Fire Service",        category:"fire",     lat:17.4000, lng:78.4750, phone:"101",         address:"Central, Hyderabad",     city:"Hyderabad"},
-  {id:34, name:"Cyberabad Towing",              category:"towing",   lat:17.4400, lng:78.3800, phone:"04027852400", address:"Hitec City, Hyderabad",  city:"Hyderabad"},
-
-  // Kolkata
-  {id:35, name:"Calcutta Medical College",      category:"hospital", lat:22.5735, lng:88.3639, phone:"03322123700", address:"College Square, Kolkata",city:"Kolkata"},
-  {id:36, name:"SSKM Hospital",                 category:"hospital", lat:22.5386, lng:88.3444, phone:"03322231589", address:"Bhowanipore, Kolkata",   city:"Kolkata"},
-  {id:37, name:"Kolkata Police HQ",             category:"police",   lat:22.5645, lng:88.3433, phone:"100",         address:"Lalbazar, Kolkata",      city:"Kolkata"},
-  {id:38, name:"Kolkata Fire Service",          category:"fire",     lat:22.5600, lng:88.3500, phone:"101",         address:"Central, Kolkata",       city:"Kolkata"},
-  {id:39, name:"Kolkata Traffic Towing",        category:"towing",   lat:22.5650, lng:88.3550, phone:"03322143231", address:"Park Street, Kolkata",   city:"Kolkata"},
-
-  // Ahmedabad
-  {id:40, name:"Civil Hospital Ahmedabad",      category:"hospital", lat:23.0526, lng:72.6030, phone:"07922683721", address:"Asarwa, Ahmedabad",      city:"Ahmedabad"},
-  {id:41, name:"SVP Hospital",                  category:"hospital", lat:23.0245, lng:72.5721, phone:"07926579698", address:"Ellisbridge, Ahmedabad", city:"Ahmedabad"},
-  {id:42, name:"Ahmedabad Police HQ",           category:"police",   lat:23.0300, lng:72.5800, phone:"100",         address:"Shahibag, Ahmedabad",    city:"Ahmedabad"},
-  {id:43, name:"Ahmedabad Fire Brigade",        category:"fire",     lat:23.0250, lng:72.5850, phone:"101",         address:"Danapith, Ahmedabad",    city:"Ahmedabad"},
-  {id:44, name:"Ahmedabad Towing",              category:"towing",   lat:23.0200, lng:72.5800, phone:"07925624100", address:"Central, Ahmedabad",     city:"Ahmedabad"},
-
-  // Jaipur
-  {id:45, name:"SMS Hospital Jaipur",           category:"hospital", lat:26.8920, lng:75.8198, phone:"01412560291", address:"JLN Marg, Jaipur",       city:"Jaipur"},
-  {id:46, name:"Jaipur Police HQ",              category:"police",   lat:26.9150, lng:75.8000, phone:"100",         address:"Lalkothi, Jaipur",       city:"Jaipur"},
-  {id:47, name:"Jaipur Fire Brigade",           category:"fire",     lat:26.9100, lng:75.8050, phone:"101",         address:"Central, Jaipur",        city:"Jaipur"},
-  {id:48, name:"Jaipur Traffic Towing",         category:"towing",   lat:26.9000, lng:75.8100, phone:"01412565656", address:"MI Road, Jaipur",        city:"Jaipur"},
-
-  // Lucknow
-  {id:49, name:"KGMU Lucknow",                  category:"hospital", lat:26.8640, lng:80.9150, phone:"05222257451", address:"Chowk, Lucknow",         city:"Lucknow"},
-  {id:50, name:"SGPGI Lucknow",                 category:"hospital", lat:26.7380, lng:80.9340, phone:"05222440007", address:"Raebareli Rd, Lucknow",  city:"Lucknow"},
-  {id:51, name:"Lucknow Police HQ",             category:"police",   lat:26.8500, lng:80.9200, phone:"100",         address:"Hazratganj, Lucknow",    city:"Lucknow"},
-  {id:52, name:"Lucknow Fire Station",          category:"fire",     lat:26.8450, lng:80.9250, phone:"101",         address:"Hazratganj, Lucknow",    city:"Lucknow"},
-
-  // Chandigarh
-  {id:53, name:"PGIMER Chandigarh",             category:"hospital", lat:30.7629, lng:76.7770, phone:"01722746018", address:"Sector 12, Chandigarh",  city:"Chandigarh"},
-  {id:54, name:"Chandigarh Police HQ",          category:"police",   lat:30.7300, lng:76.7800, phone:"100",         address:"Sector 9, Chandigarh",   city:"Chandigarh"},
-  {id:55, name:"Chandigarh Fire Service",       category:"fire",     lat:30.7350, lng:76.7750, phone:"101",         address:"Sector 17, Chandigarh",  city:"Chandigarh"},
-  {id:56, name:"Chandigarh Towing",             category:"towing",   lat:30.7400, lng:76.7800, phone:"01722749000", address:"Sector 17, Chandigarh",  city:"Chandigarh"},
-
-  // Bhopal
-  {id:57, name:"AIIMS Bhopal",                  category:"hospital", lat:23.2039, lng:77.4608, phone:"07552672322", address:"Saket Nagar, Bhopal",    city:"Bhopal"},
-  {id:58, name:"Hamidia Hospital",              category:"hospital", lat:23.2650, lng:77.3950, phone:"07552540590", address:"Royal Market, Bhopal",   city:"Bhopal"},
-  {id:59, name:"Bhopal Police HQ",              category:"police",   lat:23.2500, lng:77.4000, phone:"100",         address:"Jahangirabad, Bhopal",   city:"Bhopal"},
-  {id:60, name:"Bhopal Fire Station",           category:"fire",     lat:23.2450, lng:77.4050, phone:"101",         address:"MP Nagar, Bhopal",       city:"Bhopal"},
-  {id:61, name:"Bhopal Towing Services",        category:"towing",   lat:23.2500, lng:77.4100, phone:"07552551551", address:"Arera Hills, Bhopal",    city:"Bhopal"},
+const NATIONAL_EMERGENCY = [
+  { id:9001, name:'Police Emergency',    category:'police',   phone:'100',  address:'National Emergency — call anywhere' },
+  { id:9002, name:'Fire Emergency',      category:'fire',     phone:'101',  address:'National Emergency — call anywhere' },
+  { id:9003, name:'Ambulance (108)',     category:'hospital', phone:'108',  address:'National Ambulance — call anywhere' },
+  { id:9004, name:'NHAI Highway Helpline',category:'towing',  phone:'1073', address:'NHAI Highway Emergency' },
 ];
+
+// ══════════════════════════════════════════════
+// CURATED CITY DATA (verified, fast — used when user is in a known city)
+// Keys match the normalized city name returned by reverse geocoding
+// ══════════════════════════════════════════════
+const CITY_SERVICES = {
+  "Delhi": [
+    {id:101,name:"AIIMS Delhi",              category:"hospital",lat:28.5672,lng:77.2100,phone:"01126588500",address:"Ansari Nagar, New Delhi"},
+    {id:102,name:"Safdarjung Hospital",       category:"hospital",lat:28.5674,lng:77.2090,phone:"01126707444",address:"New Delhi"},
+    {id:103,name:"RML Hospital Delhi",        category:"hospital",lat:28.6237,lng:77.2090,phone:"01123404321",address:"Connaught Place, Delhi"},
+    {id:104,name:"Lok Nayak Hospital Delhi",  category:"hospital",lat:28.6345,lng:77.2348,phone:"01123232400",address:"Daryaganj, Delhi"},
+    {id:105,name:"Delhi Police HQ",           category:"police",  lat:28.6304,lng:77.2177,phone:"100",        address:"ITO, New Delhi"},
+    {id:106,name:"Connaught Place Fire Stn.", category:"fire",    lat:28.6315,lng:77.2167,phone:"101",        address:"Connaught Place, Delhi"},
+    {id:107,name:"Delhi Traffic Police Tow",  category:"towing",  lat:28.6300,lng:77.2150,phone:"01125844444",address:"New Delhi"},
+  ],
+  "Mumbai": [
+    {id:201,name:"KEM Hospital Mumbai",        category:"hospital",lat:18.9990,lng:72.8418,phone:"02224107000",address:"Parel, Mumbai"},
+    {id:202,name:"Nair Hospital Mumbai",       category:"hospital",lat:18.9647,lng:72.8258,phone:"02223027600",address:"Mumbai Central"},
+    {id:203,name:"Sir J.J. Hospital",          category:"hospital",lat:18.9633,lng:72.8338,phone:"02223735555",address:"Byculla, Mumbai"},
+    {id:204,name:"Mumbai Police HQ",           category:"police",  lat:18.9322,lng:72.8418,phone:"100",        address:"Crawford Market, Mumbai"},
+    {id:205,name:"Byculla Fire Brigade",       category:"fire",    lat:18.9750,lng:72.8350,phone:"101",        address:"Byculla, Mumbai"},
+    {id:206,name:"Mumbai Traffic Towing",      category:"towing",  lat:19.0176,lng:72.8562,phone:"02228892222",address:"Andheri, Mumbai"},
+  ],
+  "Bengaluru": [
+    {id:301,name:"St. Johns Medical College",  category:"hospital",lat:12.9250,lng:77.6120,phone:"08022064000",address:"Koramangala, Bengaluru"},
+    {id:302,name:"Bowring Hospital",           category:"hospital",lat:12.9716,lng:77.5946,phone:"08025571100",address:"Shivajinagar, Bengaluru"},
+    {id:303,name:"Victoria Hospital",          category:"hospital",lat:12.9624,lng:77.5729,phone:"08026703000",address:"KR Market, Bengaluru"},
+    {id:304,name:"Bengaluru City Police",      category:"police",  lat:12.9779,lng:77.5952,phone:"100",        address:"Infantry Road, Bengaluru"},
+    {id:305,name:"Bengaluru Fire Services",    category:"fire",    lat:12.9750,lng:77.5900,phone:"101",        address:"Central, Bengaluru"},
+    {id:306,name:"Nandi Towing Services",      category:"towing",  lat:12.9700,lng:77.6000,phone:"08022221111",address:"MG Road, Bengaluru"},
+  ],
+  "Bangalore": "Bengaluru",  // alias
+  "Hyderabad": [
+    {id:401,name:"Osmania General Hospital",   category:"hospital",lat:17.3804,lng:78.4716,phone:"04024600146",address:"Afzal Gunj, Hyderabad"},
+    {id:402,name:"Gandhi Hospital",            category:"hospital",lat:17.4241,lng:78.5028,phone:"04027702222",address:"Secunderabad"},
+    {id:403,name:"Nizam's Institute (NIMS)",   category:"hospital",lat:17.4063,lng:78.4691,phone:"04023489000",address:"Punjagutta, Hyderabad"},
+    {id:404,name:"Hyderabad Police HQ",        category:"police",  lat:17.3990,lng:78.4760,phone:"100",        address:"Basheerbagh, Hyderabad"},
+    {id:405,name:"Hyderabad Fire Service",     category:"fire",    lat:17.4000,lng:78.4750,phone:"101",        address:"Central, Hyderabad"},
+    {id:406,name:"Cyberabad Traffic Police",   category:"towing",  lat:17.4400,lng:78.3800,phone:"04027852400",address:"Hitec City, Hyderabad"},
+  ],
+  "Pune": [
+    {id:501,name:"Sassoon General Hospital",   category:"hospital",lat:18.5178,lng:73.8543,phone:"02026120009",address:"Pune, Maharashtra"},
+    {id:502,name:"KEM Hospital Pune",          category:"hospital",lat:18.5120,lng:73.8553,phone:"02026128000",address:"Rasta Peth, Pune"},
+    {id:503,name:"Ruby Hall Clinic",           category:"hospital",lat:18.5320,lng:73.8820,phone:"02026163391",address:"Wanowrie, Pune"},
+    {id:504,name:"Pune Police HQ",             category:"police",  lat:18.5195,lng:73.8553,phone:"100",        address:"Shivajinagar, Pune"},
+    {id:505,name:"Deccan Fire Station",        category:"fire",    lat:18.5201,lng:73.8452,phone:"101",        address:"Deccan Gymkhana, Pune"},
+    {id:506,name:"Pune Traffic Towing",        category:"towing",  lat:18.5200,lng:73.8500,phone:"02025536298",address:"Central Pune"},
+  ],
+  "Chennai": [
+    {id:601,name:"Govt Stanley Hospital",      category:"hospital",lat:13.0827,lng:80.2707,phone:"04425281232",address:"Old Jail Road, Chennai"},
+    {id:602,name:"Apollo Hospitals Greams Rd", category:"hospital",lat:13.0604,lng:80.2496,phone:"04428290200",address:"Greams Road, Chennai"},
+    {id:603,name:"Chennai Police HQ",          category:"police",  lat:13.0418,lng:80.2773,phone:"100",        address:"Mylapore, Chennai"},
+    {id:604,name:"Chennai Fire Brigade",       category:"fire",    lat:13.0500,lng:80.2700,phone:"101",        address:"Egmore, Chennai"},
+    {id:605,name:"Chennai Traffic Towing",     category:"towing",  lat:13.0600,lng:80.2600,phone:"04423452365",address:"Mount Road, Chennai"},
+  ],
+  "Kolkata": [
+    {id:701,name:"Calcutta Medical College",   category:"hospital",lat:22.5735,lng:88.3639,phone:"03322123700",address:"College Square, Kolkata"},
+    {id:702,name:"SSKM Hospital",             category:"hospital",lat:22.5386,lng:88.3444,phone:"03322231589",address:"Bhowanipore, Kolkata"},
+    {id:703,name:"Kolkata Police HQ",         category:"police",  lat:22.5645,lng:88.3433,phone:"100",        address:"Lalbazar, Kolkata"},
+    {id:704,name:"Kolkata Fire Service",      category:"fire",    lat:22.5600,lng:88.3500,phone:"101",        address:"Central, Kolkata"},
+    {id:705,name:"Kolkata Traffic Towing",    category:"towing",  lat:22.5650,lng:88.3550,phone:"03322143231",address:"Park Street, Kolkata"},
+  ],
+  "Jaipur": [
+    {id:801,name:"SMS Hospital Jaipur",        category:"hospital",lat:26.8920,lng:75.8198,phone:"01412560291",address:"JLN Marg, Jaipur"},
+    {id:802,name:"Jaipur Police HQ",          category:"police",  lat:26.9150,lng:75.8000,phone:"100",        address:"Lalkothi, Jaipur"},
+    {id:803,name:"Jaipur Fire Brigade",       category:"fire",    lat:26.9100,lng:75.8050,phone:"101",        address:"Central, Jaipur"},
+    {id:804,name:"Jaipur Traffic Towing",     category:"towing",  lat:26.9000,lng:75.8100,phone:"01412565656",address:"MI Road, Jaipur"},
+  ],
+  "Ahmedabad": [
+    {id:901,name:"Civil Hospital Ahmedabad",   category:"hospital",lat:23.0526,lng:72.6030,phone:"07922683721",address:"Asarwa, Ahmedabad"},
+    {id:902,name:"SVP Hospital",              category:"hospital",lat:23.0245,lng:72.5721,phone:"07926579698",address:"Ellisbridge, Ahmedabad"},
+    {id:903,name:"Ahmedabad Police HQ",       category:"police",  lat:23.0300,lng:72.5800,phone:"100",        address:"Shahibag, Ahmedabad"},
+    {id:904,name:"Ahmedabad Fire Brigade",    category:"fire",    lat:23.0250,lng:72.5850,phone:"101",        address:"Danapith, Ahmedabad"},
+    {id:905,name:"Ahmedabad Traffic Towing",  category:"towing",  lat:23.0200,lng:72.5800,phone:"07925624100",address:"Central, Ahmedabad"},
+  ],
+  "Lucknow": [
+    {id:1001,name:"KGMU Lucknow",             category:"hospital",lat:26.8640,lng:80.9150,phone:"05222257451",address:"Chowk, Lucknow"},
+    {id:1002,name:"SGPGI Lucknow",            category:"hospital",lat:26.7380,lng:80.9340,phone:"05222440007",address:"Raebareli Rd, Lucknow"},
+    {id:1003,name:"Lucknow Police HQ",        category:"police",  lat:26.8500,lng:80.9200,phone:"100",        address:"Hazratganj, Lucknow"},
+    {id:1004,name:"Lucknow Fire Station",     category:"fire",    lat:26.8450,lng:80.9250,phone:"101",        address:"Hazratganj, Lucknow"},
+  ],
+  "Chandigarh": [
+    {id:1101,name:"PGIMER Chandigarh",        category:"hospital",lat:30.7629,lng:76.7770,phone:"01722746018",address:"Sector 12, Chandigarh"},
+    {id:1102,name:"Chandigarh Police HQ",     category:"police",  lat:30.7300,lng:76.7800,phone:"100",        address:"Sector 9, Chandigarh"},
+    {id:1103,name:"Chandigarh Fire Service",  category:"fire",    lat:30.7350,lng:76.7750,phone:"101",        address:"Sector 17, Chandigarh"},
+    {id:1104,name:"Chandigarh Towing",        category:"towing",  lat:30.7400,lng:76.7800,phone:"01722749000",address:"Sector 17, Chandigarh"},
+  ],
+  "Bhopal": [
+    {id:1201,name:"AIIMS Bhopal",             category:"hospital",lat:23.2039,lng:77.4608,phone:"07552672322",address:"Saket Nagar, Bhopal"},
+    {id:1202,name:"Hamidia Hospital",         category:"hospital",lat:23.2650,lng:77.3950,phone:"07552540590",address:"Royal Market, Bhopal"},
+    {id:1203,name:"Bhopal Police HQ",         category:"police",  lat:23.2500,lng:77.4000,phone:"100",        address:"Jahangirabad, Bhopal"},
+    {id:1204,name:"Bhopal Fire Station",      category:"fire",    lat:23.2450,lng:77.4050,phone:"101",        address:"MP Nagar, Bhopal"},
+    {id:1205,name:"Bhopal Towing Services",   category:"towing",  lat:23.2500,lng:77.4100,phone:"07552551551",address:"Arera Hills, Bhopal"},
+  ],
+};
+
+// Resolve alias (e.g. "Bangalore" → "Bengaluru")
+function resolveCityKey(city) {
+  if (!city) return null;
+  const key = Object.keys(CITY_SERVICES).find(
+    k => k.toLowerCase() === city.toLowerCase()
+  );
+  if (!key) return null;
+  const val = CITY_SERVICES[key];
+  return typeof val === 'string' ? val : key;  // alias or direct
+}
 
 // ══════════════════════════════════════════════
 // INDEXEDDB
